@@ -1,0 +1,49 @@
+# Demo script: document commands, edits, composite operations, queries,
+# undo/redo, IO round trip. Replay with:
+#   node dist/src/index.js examples/demo.txt
+init 800 600
+create rect bg 0 0 800 600 #ffffff
+create text title 20 40 "My Diagram"
+create circle c1 100 100 20 red
+create rect box 200 80 60 60 #3366ff
+
+# adopt existing shapes into a container
+group markers c1 box
+tree
+show c1
+
+# edits are undoable one command at a time
+move c1 30 0
+undo
+redo
+set title text "My Diagram v2"
+undo
+
+# z-order
+front bg
+back bg
+
+# composite operations: move a shape into a container, dissolve a nested one
+create g panel
+addto panel box
+tree
+
+# ungroup works for nested containers (a top level container is rejected)
+ungroup markers
+create g outer
+create g inner in outer
+create rect inner-r 0 0 10 10 in inner
+ungroup inner
+tree
+
+# a failed command changes nothing
+create rect box 0 0 10 10
+set nope fill red
+canvas
+canvas 1024 768
+undo
+
+# save, then read an external SVG that misses an id
+save examples/demo.svg
+read examples/other.svg
+tree

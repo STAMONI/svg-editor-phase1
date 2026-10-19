@@ -10,7 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "precli": "npm run build",
     "cli": "node dist/src/index.js",
-    "test": "npm run build && node --test --test-isolation=none \"dist/test/**/*.test.js\""
+    "test": "npm run build && node --test --test-isolation=none \"dist/test/**/*.test.js\"",
+    "check:layering": "node scripts/check-layering.mjs",
+    "verify": "npm run build && npm run check:layering && node --test --test-isolation=none \"dist/test/**/*.test.js\""
   },
   "engines": {
     "node": ">=22.8.0"

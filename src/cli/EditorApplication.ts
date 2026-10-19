@@ -18,6 +18,9 @@ import { UngroupCommand } from "../commands/edit/UngroupCommand";
 import { ShapeFactory } from "../commands/factories/ShapeFactory";
 import { RedoCommand } from "../commands/history/RedoCommand";
 import { UndoCommand } from "../commands/history/UndoCommand";
+import { HelpCommand } from "../commands/query/HelpCommand";
+import { ShowCommand } from "../commands/query/ShowCommand";
+import { TreeCommand } from "../commands/query/TreeCommand";
 import { ExitCommand } from "../commands/system/ExitCommand";
 import { NodeFileSystem } from "../io/NodeFileSystem";
 import { SvgReader } from "../io/SvgReader";
@@ -61,10 +64,14 @@ export class EditorApplication {
       new AddToCommand(),
       new FrontCommand(),
       new BackCommand(),
+      new TreeCommand(),
+      new ShowCommand(),
       new UndoCommand(),
       new RedoCommand(),
       new ExitCommand(),
     ]);
+    // `help` needs the registry itself, so it is registered afterwards.
+    this.registry.register(new HelpCommand(this.registry));
     this.parser = new CommandLineParser();
     this.repl = new Repl(this.session, this.registry, this.parser, out);
   }
