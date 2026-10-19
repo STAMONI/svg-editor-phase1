@@ -1,14 +1,15 @@
 /**
  * Entry point of the SVG editor CLI.
  *
- * At this stage the project only contains the scaffold: the entry point prints
- * the banner that the interactive REPL will keep using. The REPL wiring is
- * added in a later stage, on top of the command layer.
+ * Builds the application (composition root), then hands control to the REPL.
  */
-const BANNER = "svg-editor 0.1 — type 'help' for commands";
+import { EditorApplication } from "./cli/EditorApplication";
 
 function main(): void {
-  process.stdout.write(`${BANNER}\n`);
+  const application = new EditorApplication((line) => {
+    process.stdout.write(`${line}\n`);
+  });
+  void application.repl.start();
 }
 
 main();

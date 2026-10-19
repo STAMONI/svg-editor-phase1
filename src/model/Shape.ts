@@ -7,7 +7,11 @@ import type { ShapeType } from "./ShapeType";
 /** One serialized SVG attribute as a raw (unescaped) name/value pair. */
 export type AttributeEntry = readonly [name: string, value: string];
 
-type AttributeBinding = (raw: string) => void;
+/** Setter plus getter for one whitelisted geometry attribute. */
+interface AttributeBinding {
+  readonly set: (raw: string) => void;
+  readonly get: () => string;
+}
 
 /**
  * Abstract component of the Composite pattern.
@@ -119,7 +123,31 @@ export abstract class Shape {
         if (binding === undefined) {
           throw new CliError(`unknown attribute: ${name}`);
         }
-        binding(raw);
+        binding.set(raw);
+      }
+    }
+  }
+
+  /**
+   * Reads one whitelisted attribute as the CLI would print it, or `null` when
+   * the attribute is not set. Used for `set` feedback and undo summaries.
+   */
+  public attributeValue(name: string): string | null {
+    switch (name) {
+      case "fill":
+        return this.fillValue;
+      case "stroke":
+        return this.strokeValue;
+      case "stroke-width":
+        return this.strokeWidthValue === null
+          ? null
+          : formatNumber(this.strokeWidthValue);
+      default: {
+        const binding = this.attributeBindings.get(name);
+        if (binding === undefined) {
+          throw new CliError(`unknown attribute: ${name}`);
+        }
+        return binding.get();
       }
     }
   }
@@ -185,9 +213,13 @@ export abstract class Shape {
 
   protected abstract geometryEntries(): AttributeEntry[];
 
-  /** Registers a geometry setter for `setAttribute`. */
-  protected bindAttribute(name: string, binding: AttributeBinding): void {
-    this.attributeBindings.set(name, binding);
+  /** Registers the setter and getter of a geometry attribute. */
+  protected bindAttribute(
+    name: string,
+    set: (raw: string) => void,
+    get: () => string,
+  ): void {
+    this.attributeBindings.set(name, { set, get });
   }
 
   private describeStyle(): string {

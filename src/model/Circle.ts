@@ -15,15 +15,27 @@ export class Circle extends LeafShape {
     this.cxValue = cx;
     this.cyValue = cy;
     this.radiusValue = radius;
-    this.bindAttribute("cx", (raw) => {
-      this.cxValue = parseNumber(raw, "cx");
-    });
-    this.bindAttribute("cy", (raw) => {
-      this.cyValue = parseNumber(raw, "cy");
-    });
-    this.bindAttribute("r", (raw) => {
-      this.radiusValue = parsePositiveNumber(raw, "r");
-    });
+    this.bindAttribute(
+      "cx",
+      (raw) => {
+        this.cxValue = parseNumber(raw, "cx");
+      },
+      () => formatNumber(this.cxValue),
+    );
+    this.bindAttribute(
+      "cy",
+      (raw) => {
+        this.cyValue = parseNumber(raw, "cy");
+      },
+      () => formatNumber(this.cyValue),
+    );
+    this.bindAttribute(
+      "r",
+      (raw) => {
+        this.radiusValue = parsePositiveNumber(raw, "r");
+      },
+      () => formatNumber(this.radiusValue),
+    );
   }
 
   public override get type(): ShapeType {

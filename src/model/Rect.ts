@@ -23,18 +23,34 @@ export class Rect extends LeafShape {
     this.yValue = y;
     this.widthValue = width;
     this.heightValue = height;
-    this.bindAttribute("x", (raw) => {
-      this.xValue = parseNumber(raw, "x");
-    });
-    this.bindAttribute("y", (raw) => {
-      this.yValue = parseNumber(raw, "y");
-    });
-    this.bindAttribute("width", (raw) => {
-      this.widthValue = parsePositiveNumber(raw, "width");
-    });
-    this.bindAttribute("height", (raw) => {
-      this.heightValue = parsePositiveNumber(raw, "height");
-    });
+    this.bindAttribute(
+      "x",
+      (raw) => {
+        this.xValue = parseNumber(raw, "x");
+      },
+      () => formatNumber(this.xValue),
+    );
+    this.bindAttribute(
+      "y",
+      (raw) => {
+        this.yValue = parseNumber(raw, "y");
+      },
+      () => formatNumber(this.yValue),
+    );
+    this.bindAttribute(
+      "width",
+      (raw) => {
+        this.widthValue = parsePositiveNumber(raw, "width");
+      },
+      () => formatNumber(this.widthValue),
+    );
+    this.bindAttribute(
+      "height",
+      (raw) => {
+        this.heightValue = parsePositiveNumber(raw, "height");
+      },
+      () => formatNumber(this.heightValue),
+    );
   }
 
   public override get type(): ShapeType {

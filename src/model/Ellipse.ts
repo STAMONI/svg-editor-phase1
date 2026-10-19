@@ -17,18 +17,34 @@ export class Ellipse extends LeafShape {
     this.cyValue = cy;
     this.rxValue = rx;
     this.ryValue = ry;
-    this.bindAttribute("cx", (raw) => {
-      this.cxValue = parseNumber(raw, "cx");
-    });
-    this.bindAttribute("cy", (raw) => {
-      this.cyValue = parseNumber(raw, "cy");
-    });
-    this.bindAttribute("rx", (raw) => {
-      this.rxValue = parsePositiveNumber(raw, "rx");
-    });
-    this.bindAttribute("ry", (raw) => {
-      this.ryValue = parsePositiveNumber(raw, "ry");
-    });
+    this.bindAttribute(
+      "cx",
+      (raw) => {
+        this.cxValue = parseNumber(raw, "cx");
+      },
+      () => formatNumber(this.cxValue),
+    );
+    this.bindAttribute(
+      "cy",
+      (raw) => {
+        this.cyValue = parseNumber(raw, "cy");
+      },
+      () => formatNumber(this.cyValue),
+    );
+    this.bindAttribute(
+      "rx",
+      (raw) => {
+        this.rxValue = parsePositiveNumber(raw, "rx");
+      },
+      () => formatNumber(this.rxValue),
+    );
+    this.bindAttribute(
+      "ry",
+      (raw) => {
+        this.ryValue = parsePositiveNumber(raw, "ry");
+      },
+      () => formatNumber(this.ryValue),
+    );
   }
 
   public override get type(): ShapeType {

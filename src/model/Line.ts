@@ -17,18 +17,34 @@ export class Line extends LeafShape {
     this.y1Value = y1;
     this.x2Value = x2;
     this.y2Value = y2;
-    this.bindAttribute("x1", (raw) => {
-      this.x1Value = parseNumber(raw, "x1");
-    });
-    this.bindAttribute("y1", (raw) => {
-      this.y1Value = parseNumber(raw, "y1");
-    });
-    this.bindAttribute("x2", (raw) => {
-      this.x2Value = parseNumber(raw, "x2");
-    });
-    this.bindAttribute("y2", (raw) => {
-      this.y2Value = parseNumber(raw, "y2");
-    });
+    this.bindAttribute(
+      "x1",
+      (raw) => {
+        this.x1Value = parseNumber(raw, "x1");
+      },
+      () => formatNumber(this.x1Value),
+    );
+    this.bindAttribute(
+      "y1",
+      (raw) => {
+        this.y1Value = parseNumber(raw, "y1");
+      },
+      () => formatNumber(this.y1Value),
+    );
+    this.bindAttribute(
+      "x2",
+      (raw) => {
+        this.x2Value = parseNumber(raw, "x2");
+      },
+      () => formatNumber(this.x2Value),
+    );
+    this.bindAttribute(
+      "y2",
+      (raw) => {
+        this.y2Value = parseNumber(raw, "y2");
+      },
+      () => formatNumber(this.y2Value),
+    );
   }
 
   public override get type(): ShapeType {

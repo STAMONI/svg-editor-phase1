@@ -21,15 +21,27 @@ export class TextShape extends LeafShape {
     this.xValue = x;
     this.yValue = y;
     this.contentValue = content;
-    this.bindAttribute("x", (raw) => {
-      this.xValue = parseNumber(raw, "x");
-    });
-    this.bindAttribute("y", (raw) => {
-      this.yValue = parseNumber(raw, "y");
-    });
-    this.bindAttribute("text", (raw) => {
-      this.contentValue = raw;
-    });
+    this.bindAttribute(
+      "x",
+      (raw) => {
+        this.xValue = parseNumber(raw, "x");
+      },
+      () => formatNumber(this.xValue),
+    );
+    this.bindAttribute(
+      "y",
+      (raw) => {
+        this.yValue = parseNumber(raw, "y");
+      },
+      () => formatNumber(this.yValue),
+    );
+    this.bindAttribute(
+      "text",
+      (raw) => {
+        this.contentValue = raw;
+      },
+      () => this.contentValue,
+    );
   }
 
   public override get type(): ShapeType {
