@@ -1,0 +1,3 @@
+# Normalize line endings: the repository stores LF, regardless of the Windows checkout setting.
+* text=auto eol=lf
+*.svg text eol=lf
