@@ -2,11 +2,16 @@ import { CommandLineParser } from "../commands/CommandLineParser";
 import { CommandRegistry } from "../commands/CommandRegistry";
 import { EditorSession } from "../commands/EditorSession";
 import { InitCommand } from "../commands/document/InitCommand";
+import { AddToCommand } from "../commands/edit/AddToCommand";
+import { BackCommand } from "../commands/edit/BackCommand";
 import { CreateCommand } from "../commands/edit/CreateCommand";
 import { DeleteCommand } from "../commands/edit/DeleteCommand";
+import { FrontCommand } from "../commands/edit/FrontCommand";
+import { GroupCommand } from "../commands/edit/GroupCommand";
 import { MoveCommand } from "../commands/edit/MoveCommand";
 import { ScaleCommand } from "../commands/edit/ScaleCommand";
 import { SetCommand } from "../commands/edit/SetCommand";
+import { UngroupCommand } from "../commands/edit/UngroupCommand";
 import { ShapeFactory } from "../commands/factories/ShapeFactory";
 import { ExitCommand } from "../commands/system/ExitCommand";
 import { Repl } from "./Repl";
@@ -33,6 +38,11 @@ export class EditorApplication {
       new MoveCommand(),
       new ScaleCommand(),
       new SetCommand(),
+      new GroupCommand(),
+      new UngroupCommand(),
+      new AddToCommand(),
+      new FrontCommand(),
+      new BackCommand(),
       new ExitCommand(),
     ]);
     this.parser = new CommandLineParser();

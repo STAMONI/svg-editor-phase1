@@ -22,6 +22,15 @@ export abstract class Container extends Shape {
     return null;
   }
 
+  /**
+   * Extension point for plugin composite shapes (`box` in the next phase):
+   * such a shape is a container whose internal structure is owned by the
+   * plugin, so `ungroup` must refuse to dissolve it. Plain `g` returns false.
+   */
+  public get isPluginComposite(): boolean {
+    return false;
+  }
+
   public override move(dx: number, dy: number): void {
     for (const child of this.childShapes) {
       child.move(dx, dy);

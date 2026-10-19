@@ -71,7 +71,7 @@ test("create rejects unknown types, duplicate ids and bad parameters", () => {
     "error: r must be positive",
   ]);
   assert.deepEqual(editor.run("create rect r2 0 0 10 10 in g1"), [
-    "error: invalid parameters for create rect (expected 4 or 5 parameters, got 6)",
+    "error: no such container: g1",
   ]);
 });
 
