@@ -1,4 +1,6 @@
 import { formatNumber, parseNumber } from "./NumberCodec";
+import { attributeNumber } from "./AttributeLookup";
+import type { AttributeLookup } from "./AttributeLookup";
 import { LeafShape } from "./LeafShape";
 import type { AttributeEntry } from "./Shape";
 import type { Point } from "./Point";
@@ -46,6 +48,20 @@ export class TextShape extends LeafShape {
 
   public override get type(): ShapeType {
     return "text";
+  }
+
+  /** Builds a text node from SVG attributes plus its character data. */
+  public static createFromSvg(
+    id: string,
+    attributes: AttributeLookup,
+    content: string,
+  ): TextShape {
+    return new TextShape(
+      id,
+      attributeNumber(attributes, "x", 0),
+      attributeNumber(attributes, "y", 0),
+      content,
+    );
   }
 
   public override get tagName(): string {

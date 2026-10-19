@@ -1,4 +1,6 @@
 import { formatNumber, parseNumber } from "./NumberCodec";
+import { attributeNumber } from "./AttributeLookup";
+import type { AttributeLookup } from "./AttributeLookup";
 import { LeafShape } from "./LeafShape";
 import type { AttributeEntry } from "./Shape";
 import type { Point } from "./Point";
@@ -49,6 +51,17 @@ export class Line extends LeafShape {
 
   public override get type(): ShapeType {
     return "line";
+  }
+
+  /** Builds a line from SVG attributes (missing coordinates default to 0). */
+  public static createFromSvg(id: string, attributes: AttributeLookup): Line {
+    return new Line(
+      id,
+      attributeNumber(attributes, "x1", 0),
+      attributeNumber(attributes, "y1", 0),
+      attributeNumber(attributes, "x2", 0),
+      attributeNumber(attributes, "y2", 0),
+    );
   }
 
   public override get tagName(): string {

@@ -1,4 +1,9 @@
 import { formatNumber, parseNumber, parsePositiveNumber } from "./NumberCodec";
+import {
+  attributeNumber,
+  attributePositiveNumber,
+} from "./AttributeLookup";
+import type { AttributeLookup } from "./AttributeLookup";
 import { LeafShape } from "./LeafShape";
 import type { AttributeEntry } from "./Shape";
 import type { Point } from "./Point";
@@ -55,6 +60,17 @@ export class Rect extends LeafShape {
 
   public override get type(): ShapeType {
     return "rect";
+  }
+
+  /** Builds a rect from SVG attributes (missing x/y default to 0). */
+  public static createFromSvg(id: string, attributes: AttributeLookup): Rect {
+    return new Rect(
+      id,
+      attributeNumber(attributes, "x", 0),
+      attributeNumber(attributes, "y", 0),
+      attributePositiveNumber(attributes, "width"),
+      attributePositiveNumber(attributes, "height"),
+    );
   }
 
   public override get tagName(): string {

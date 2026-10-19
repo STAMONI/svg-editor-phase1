@@ -31,8 +31,13 @@ export interface Command {
   readonly syntax: string;
   /** One line description shown by `help`. */
   readonly description: string;
-  /** Document / edit / query / history classification. */
+  /** Static document / edit / query / history classification. */
   readonly category: CommandCategory;
+  /**
+   * Optional dynamic classification. `canvas` is a query without arguments but
+   * a document level command when it resizes the canvas.
+   */
+  categoryFor?(args: readonly string[]): CommandCategory;
   /** When true a document must exist before the command runs. */
   readonly requiresDocument: boolean;
   /** Executes the command; throws CliError on validation failures. */

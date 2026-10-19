@@ -1,4 +1,9 @@
 import { formatNumber, parseNumber, parsePositiveNumber } from "./NumberCodec";
+import {
+  attributeNumber,
+  attributePositiveNumber,
+} from "./AttributeLookup";
+import type { AttributeLookup } from "./AttributeLookup";
 import { LeafShape } from "./LeafShape";
 import type { AttributeEntry } from "./Shape";
 import type { Point } from "./Point";
@@ -49,6 +54,17 @@ export class Ellipse extends LeafShape {
 
   public override get type(): ShapeType {
     return "ellipse";
+  }
+
+  /** Builds an ellipse from SVG attributes (missing cx/cy default to 0). */
+  public static createFromSvg(id: string, attributes: AttributeLookup): Ellipse {
+    return new Ellipse(
+      id,
+      attributeNumber(attributes, "cx", 0),
+      attributeNumber(attributes, "cy", 0),
+      attributePositiveNumber(attributes, "rx"),
+      attributePositiveNumber(attributes, "ry"),
+    );
   }
 
   public override get tagName(): string {

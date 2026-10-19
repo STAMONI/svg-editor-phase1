@@ -1,4 +1,9 @@
 import { formatNumber, parseNumber, parsePositiveNumber } from "./NumberCodec";
+import {
+  attributeNumber,
+  attributePositiveNumber,
+} from "./AttributeLookup";
+import type { AttributeLookup } from "./AttributeLookup";
 import { LeafShape } from "./LeafShape";
 import type { AttributeEntry } from "./Shape";
 import type { Point } from "./Point";
@@ -40,6 +45,16 @@ export class Circle extends LeafShape {
 
   public override get type(): ShapeType {
     return "circle";
+  }
+
+  /** Builds a circle from SVG attributes (missing cx/cy default to 0). */
+  public static createFromSvg(id: string, attributes: AttributeLookup): Circle {
+    return new Circle(
+      id,
+      attributeNumber(attributes, "cx", 0),
+      attributeNumber(attributes, "cy", 0),
+      attributePositiveNumber(attributes, "r"),
+    );
   }
 
   public override get tagName(): string {

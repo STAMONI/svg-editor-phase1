@@ -1,17 +1,20 @@
 import { EditorApplication } from "../../src/cli/EditorApplication";
+import { InMemoryFileSystem } from "./InMemoryFileSystem";
 
 /**
  * Test harness: builds the real application (same composition root as the CLI)
- * and captures every printed line.
+ * with an in-memory file system, and captures every printed line.
  */
 export class EditorHarness {
   private readonly application: EditorApplication;
   private readonly output: string[] = [];
+  public readonly fileSystem: InMemoryFileSystem;
 
-  public constructor() {
+  public constructor(fileSystem: InMemoryFileSystem = new InMemoryFileSystem()) {
+    this.fileSystem = fileSystem;
     this.application = new EditorApplication((line) => {
       this.output.push(line);
-    });
+    }, fileSystem);
   }
 
   /** Runs one input line and returns the lines printed for it. */
