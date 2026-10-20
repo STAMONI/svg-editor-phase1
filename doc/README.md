@@ -32,7 +32,7 @@ node dist/src/index.js examples/flowchart.txt   # 回放脚本，生成 SVG
 | `src/commands/` | Command 模式落地：命令接口、具体命令、命令注册与分发、参数解析、会话编排 | `Command`（接口）、`CommandRegistry`、`CommandLineParser`、`EditorSession`、`ShapeFactory`，以及 `document/`、`edit/`、`query/`、`history/`、`system/` 下的各具体命令、`TreeRenderer` |
 | `src/cli/` | 交互层：REPL、提示符、输出、组合根 | `Repl`、`EditorApplication`（组合根） |
 | `src/index.ts` | 进程入口（交互模式 / 脚本回放模式） | — |
-| `test/` | 自动化测试（`node --test` 驱动） | 8 个测试文件 + 2 个测试辅助类 |
+| `test/` | 自动化测试（`node --test` 驱动） | 11 个测试文件 + 2 个测试辅助类 |
 | `examples/` | 可直接回放的命令脚本、外部 SVG 样例、生成产物 | `flowchart.txt`、`demo.txt`、`other.svg`、`flowchart.svg`、`demo.svg` |
 | `scripts/` | 工程质量脚本 | `check-layering.mjs`（依赖方向静态检查） |
 
@@ -121,7 +121,78 @@ Parser ..> Err
 @enduml
 ```
 
-### 1.3 设计模式的选择与落地
+### 1.3 类层次（PlantUML 类图）
+
+组件图说明「模块怎么切」，下图补充「领域对象怎么组织」，对应附件对
+「类层次 + 多态 + 封装」的要求：
+
+```plantuml
+@startuml
+hide empty members
+skinparam classAttributeIconSize 0
+
+abstract class Shape {
+  -shapeId: string
+  -parentContainer: Container | null
+  -fillValue / strokeValue / strokeWidthValue
+  +id: string
+  +parent: Container | null
+  +move(dx, dy): void {abstract}
+  +scale(factor): void {abstract}
+  +anchor: Point | null {abstract}
+  +setAttribute(name, value): void
+  +attributeValue(name): string | null
+  +clone(): Shape
+  +attributeEntries(): AttributeEntry[]
+  +describeInline(): string
+  +describeDetails(): string[]
+}
+abstract class LeafShape {
+  move / scale = template methods
+}
+class Rect
+class Circle
+class Ellipse
+class Line
+class TextShape
+abstract class Container {
+  -childShapes: Shape[]
+  +children: readonly Shape[]
+  +appendShape(s) / insertShapeAt(i, s) / detachShape(s)
+  +isAncestorOf(s): boolean
+  +isPluginComposite: boolean {get}
+}
+class Group
+class Canvas
+class SvgDocument {
+  -canvasInstance: Canvas
+  +width / height
+  +findShape(id) / requireShape(id) / requireContainer(id)
+  +attachShape(s, parent) / relocateShape(s, parent) / detachShape(s)
+  +snapshot(): SvgDocument
+  +elementCount(): number
+}
+
+Shape <|-- LeafShape
+LeafShape <|-- Rect
+LeafShape <|-- Circle
+LeafShape <|-- Ellipse
+LeafShape <|-- Line
+LeafShape <|-- TextShape
+Shape <|-- Container
+Container <|-- Group
+Container <|-- Canvas
+SvgDocument *-- Canvas
+Container o-- "0..*" Shape : children (z-order)
+Shape --> Container : parent
+@enduml
+```
+
+要点：几何字段全部私有，外部只能经 `setAttribute`（白名单）/ `attributeValue` 读写；
+`LeafShape` 把 `move`/`scale` 收敛为模板方法（子类只实现自己的几何算术）；`Container`
+覆写为递归下发，因此命令层对 `g` 与叶子一视同仁。
+
+### 1.4 设计模式的选择与落地
 
 **1) Command 模式（题目强制要求）**
 
@@ -167,7 +238,7 @@ Parser ..> Err
 > 只做查找，不在其中实现图形行为。它们已标注为**待重构点**：插件化阶段会用
 > `ShapeProvider` 注册表替换图形工厂，`box` 等新类型无需修改内核。
 
-### 1.4 依赖方向规则
+### 1.5 依赖方向规则
 
 ```
 errors  ←  model  ←  io  ←  commands  ←  cli
@@ -195,7 +266,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 检查手段：`scripts/check-layering.mjs` 扫描 `src/**/*.ts` 的静态 import 并断言上述规则，
 `npm run verify` 会执行它（真实输出见第 4 节）。
 
-### 1.5 变化点假设
+### 1.6 变化点假设
 
 | 变化点 | 假设 | 是否预留扩展点 |
 |---|---|---|
@@ -207,7 +278,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | undo 策略 | 图形数量大时快照变重 | 否（有意取舍）：本阶段规模小，快照换取正确性；将来可在 `UndoManager` 内替换为逆操作而不影响命令与界面 |
 | 画布/坐标变换 | 若未来需要 SVG `transform` | 否（有意不留）：本阶段需求要求绝对坐标语义；若引入 transform，`move`/`scale` 与 `show` 需同时改，属于跨层变更，过早抽象反而增加复杂度 |
 
-### 1.6 命令与实现对照
+### 1.7 命令与实现对照
 
 | 命令 | 实现类 | category |
 |---|---|---|
@@ -228,6 +299,31 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | `help` | `query/HelpCommand` | query |
 | `undo` / `redo` | `history/UndoCommand` / `history/RedoCommand` | history |
 | `exit`（便利命令，非附件要求） | `system/ExitCommand` | query |
+
+### 1.8 错误信息契约（附件 4.2 的逐条落地）
+
+所有错误统一以 `error:` 开头（由 REPL 添加前缀，`CliError` 本身不含前缀），一行一条，
+且命令失败不改变任何状态（会话层异常回滚）。下表是附件错误表与实现/测试的对照：
+
+| 场景（附件 4.2） | 实际输出 | 产生位置 | 契约测试 |
+|---|---|---|---|
+| id 已存在 | `error: id already exists: r1` | `SvgDocument.assertIdAvailable` | `ErrorMessageContract` |
+| id 不存在 | `error: no such shape: r9` | `SvgDocument.requireShape` | `ErrorMessageContract` |
+| `in` 目标不存在 | `error: no such container: node9` | `SvgDocument.requireContainer` | `ErrorMessageContract` |
+| `in` 目标不是容器 | `error: not a container: start` | `SvgDocument.requireContainer` | `ErrorMessageContract` |
+| 未注册的图形类型 | `error: unknown shape type: hexagon (is the plugin loaded?)` | `ShapeFactory.create` | `ErrorMessageContract` |
+| ungroup 复合图形 | `error: cannot ungroup composite shape: n1` | `UngroupCommand`（`isPluginComposite` 钩子；用测试替身覆盖） | `ErrorMessageContract` |
+| group 目标含容器与其子孙 | `error: cannot group a container into its own descendant: g1` | `GroupCommand` | `ErrorMessageContract` |
+| ungroup 根级容器 | `error: cannot ungroup top-level container: scene` | `UngroupCommand` | `ErrorMessageContract` |
+| scale 非正数 | `error: scale factor must be positive` | `ScaleCommand` | `ErrorMessageContract` |
+| 文件不存在 / 不可写 | `error: cannot read file: a.svg` / `error: cannot write file: a.svg` | `SvgReader` / `SvgWriter` | `ErrorMessageContract` |
+| 未 read/init 就执行其他命令 | `error: no document. use 'init' or 'read' first` | `EditorSession.execute` | `ErrorMessageContract` |
+| 白名单之外的属性 | `error: unknown attribute: opacity` | `Shape.setAttribute` | `ErrorMessageContract` |
+| 文档类命令后 undo/redo | `error: undo not allowed after io command`（redo 同构） | `UndoManager.assertUnlocked` | `ErrorMessageContract` |
+
+说明：`box` 属后续插件阶段，本阶段不会出现真正的复合图形对象；`cannot ungroup composite shape`
+用测试内的 `FakePluginComposite`（继承 `Container`、`isPluginComposite = true`）验证钩子契约，
+未向内核加入任何未要求的类型。
 
 ---
 
@@ -296,7 +392,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
   `error: undo not allowed after io command`，直到下一条编辑命令重新解禁。
 - 真实缺陷（测试发现）：`undo`/`redo` 用快照替换文档对象后，测试里缓存的旧 `document`
   引用失效，出现 `Cannot read properties of undefined (reading 'map')`。确认这是 Memento
-  语义的正确行为，修正测试为每次重新读取 `session.document`，并在本文档 1.3 节记录该语义。
+  语义的正确行为，修正测试为每次重新读取 `session.document`，并在本文档 1.4 节记录该语义。
 - 真实修正：`canvas` 无参数时是查询、有参数时是文档级命令；若把 `category` 写死会导致
   「查询也会锁历史」。于是给 `Command` 增加可选的 `categoryFor(args)`，由会话层动态判定。
 - 读入侧设计：为避免出现第三处 `switch(tag)`，每个图形类增加多态静态工厂
@@ -327,6 +423,25 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 - 统一执行 `npm run verify`：编译通过、依赖检查通过、67 项测试全绿（真实输出见第 4 节）。
 - 补齐本文档第 2～4 节，并按 3.1 的修订记录更新了架构方案中的模块清单与依赖规则。
 
+### 2.8 阶段 8：交付强化——错误契约与边界测试（`test: verify documented error messages and edge cases`、`docs: enrich diagrams and acceptance evidence`）
+
+- 动机：用户要求「再更新或丰富一些内容，但不要超出作业的界限」。因此本阶段**不新增任何功能**：
+  不实现 `box`、不增加未列出的命令、不改需求语义，只补强「需求符合性证据」与文档可读性。
+- 新增 `test/errors/ErrorMessageContract.test.ts`：把附件 4.2 的 13 类错误信息逐条与真实输出
+  做逐字比对（含 `cannot ungroup composite shape` 钩子契约），把「看起来实现了」变成
+  「逐条可验证」。
+- 新增 `test/cli/CompositeEdgeCases.test.ts`（6 项）：`ungroup` 在被解散容器的原位置提升子节点、
+  跨父容器 `group`、`addto` 追加顺序、嵌套容器 `front`/`back`、容器缩放的整体撤销、
+  深层嵌套结构删除后撤销还原。
+- 新增 `test/io/SvgImportEdgeCases.test.ts`（7 项）：未知元素（`title`/`desc`/`defs`/`path`）跳过、
+  `viewBox`/默认尺寸回退、单引号属性/注释/CDATA、实体解码、深层嵌套、导入属性的可编辑性、
+  `transform`/`style` 等未支持属性被忽略。
+- 真实缺陷：上述新测试首轮运行有 2 项失败，原因都是**测试自身的假设错误**而非实现缺陷——
+  (1) 我一开始把待 `ungroup` 的容器建成了顶层容器，触发了附件要求的
+  `cannot ungroup top-level container`；(2) 用 `requireShape` 探测不存在的 id，而该方法按契约
+  抛错而不是返回 `null`（应使用 `findShape`）。两处都修正测试，未改动实现。
+- 测试总数 67 → 83，全部通过；文档新增类图、错误契约表、验收清单，并更新测试/检查数字。
+
 ---
 
 ## 3. 一致性自查
@@ -342,9 +457,10 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 未列出 | `model/Point`、`model/NumberCodec`、`model/AttributeLookup` | 值对象与数值/属性读取工具，属细节类 |
 | 未列出 | `commands/query/TreeRenderer` | `tree` 的排版渲染，从命令中抽出便于单测与复用 |
 | 未列出 | `commands/document/CanvasCommand`、`history/UndoCommand`、`history/RedoCommand`、`system/ExitCommand` | 阶段 4～6 实现过程中新增的命令 |
-| `cli` 只依赖 `commands` | `cli/EditorApplication` 作为组合根，直接装配 `io` 实现 | 组合根例外，已写入 1.4 规则；`cli` 仍不写业务逻辑 |
+| `cli` 只依赖 `commands` | `cli/EditorApplication` 作为组合根，直接装配 `io` 实现 | 组合根例外，已写入 1.5 规则；`cli` 仍不写业务逻辑 |
 
-目录实际布局与 1.1 节所列为准（阶段 7 已按实际实现更新 1.1、1.2、1.4、1.6 节）。
+目录实际布局与 1.1 节所列为准（阶段 7 已按实际实现更新 1.1、1.2、1.5、1.7 节；阶段 8 又补充了
+1.3 类图与 1.8 错误契约表，因此该节编号在阶段 8 之后为 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8）。
 
 ### 3.2 依赖方向：方案规则有没有被违反？
 
@@ -360,7 +476,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
   - `src/cli/Repl.ts` 只依赖 commands 层的类型，不 import model / io；
   - 会话层 `EditorSession` 不 import 任何具体命令类。
 - 已知的「有意例外」只有组合根 `src/cli/EditorApplication.ts`（装配 `NodeFileSystem`、
-  `SvgReader`、`SvgWriter`），已在 1.4 节写明并作为允许规则的一部分。
+  `SvgReader`、`SvgWriter`），已在 1.5 节写明并作为允许规则的一部分。
 
 ---
 
@@ -370,8 +486,8 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 
 - `tsconfig.json`：`strict`、`noImplicitOverride`、`noUnusedLocals`、`noUnusedParameters`、
   `noFallthroughCasesInSwitch`、`forceConsistentCasingInFileNames`，目标 ES2022 / CommonJS。
-- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 7 最终执行
-  `npm run verify`，构建通过。
+- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 8 最终执行
+  `npm run verify`（构建 + 依赖方向检查 + 83 项测试），全部通过。
 
 ### 4.2 自动化测试
 
@@ -386,6 +502,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 4 复合操作 | 37 | 全绿 |
 | 5 撤销/持久化 | 56 | 全绿 |
 | 6 查询与最终 | 67 | 全绿 |
+| 8 交付强化（错误契约 + 边界） | 83 | 全绿 |
 
 覆盖附件第 5 节的 10 类验收场景：
 
@@ -401,9 +518,13 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 8. 文件不存在、保存失败 | `test/io/SvgPersistence.test.ts` |
 | 9. 保存后重新读取一致性 | `test/io/SvgPersistence.test.ts`、`test/cli/FlowchartCase.test.ts` |
 | 10. 两节点流程图案例 | `test/cli/FlowchartCase.test.ts`（逐行比对 `tree` 输出） |
+| 补充：附件 4.2 全部错误信息逐字契约 | `test/errors/ErrorMessageContract.test.ts` |
+| 补充：复合操作边界（跨父分组、位置提升、嵌套 z-order、缩放撤销） | `test/cli/CompositeEdgeCases.test.ts` |
+| 补充：SVG 导入边界（未知元素、viewBox 回退、引号/CDATA/实体、忽略属性） | `test/io/SvgImportEdgeCases.test.ts` |
 
 异常/边界专项：未初始化文档、未闭合引号、非法数字、非正缩放、未知属性、`box` 未注册、
-顶层容器不能 ungroup、容器入自身子孙、文件不可写、非法 XML、重复 ID 读入、中文文本往返。
+顶层容器不能 ungroup、容器入自身子孙、文件不可写、非法 XML、重复 ID 读入、中文文本往返、
+插件复合类型 `ungroup` 钩子契约、未支持元素/属性静默跳过。
 
 ### 4.3 手动 CLI 验证（真实输出摘录）
 
@@ -446,10 +567,28 @@ saved to examples/flowchart.svg (8 elements)
 - 回归：每个阶段都在前一阶段测试全绿的基础上追加新测试，从未出现「修新坏旧」后未修复的提交；
   保存→读取往返、中文往返、撤销→重做往返均作为回归用例固化。
 - 依赖方向检查：`npm run check:layering`（`layering check passed (53 files)`）。
-- 提交纪律：7 个阶段提交逐阶段推送；每个提交前实际执行构建与测试；提交信息与内容对应，
-  未使用 `reset --hard` / 强制推送 / 空提交 / 修改提交时间。
+- 提交纪律：共 9 个提交（7 个阶段 + 2 个阶段 8 强化提交）逐提交推送；每个提交前实际执行构建与
+  测试；提交信息与内容对应，未使用 `reset --hard` / 强制推送分支 / 空提交 / 修改提交时间。
+  `final` 标签在阶段 8 之后被移动到最新提交（仍是同一条线性历史的末端，**没有重写或压缩历史**）。
 
-### 4.5 已知限制（如实说明）
+### 4.5 需求验收清单（附件逐条对照）
+
+| 附件要求 | 落地情况 | 证据 |
+|---|---|---|
+| 仅六种内置类型（rect/circle/ellipse/line/text/g），`box` 属插件阶段 | 六种全部实现；`create box` 报未注册类型错误，未越界实现 | `ShapeType`、`ShapeFactory`、`ErrorMessageContract` |
+| 图形（含容器）唯一且大小写敏感 id，命令一律用 id 定位 | 全局唯一性与大小写敏感由 `SvgDocument` 保证 | `DocumentModel.test.ts` |
+| `create`/`group` 的 id 必填；读入缺 id 按标签名+序号自动补并打印 warning | 已实现，警告格式 `warning: assigned id rect1 to unnamed <rect>` | `SvgPersistence.test.ts` |
+| 所有创建命令支持 `in <containerId>` | `create … in` 已实现并校验容器存在且为 `g` | `CompositeCommands.test.ts`、`QueryCommands.test.ts` |
+| 容器与叶子统一操作（move/scale/delete/set），嵌套结构正确 | Composite 多态递归；嵌套/跨父/位置提升均有测试 | `CompositeEdgeCases.test.ts`、`FlowchartCase.test.ts` |
+| `set` 仅允许白名单属性，白名单外报 `unknown attribute` | 白名单由各图形类的属性绑定决定 | `DocumentModel.test.ts`、`ErrorMessageContract` |
+| 错误统一 `error:` 前缀、命令失败不改变状态 | 会话层快照回滚；13 类错误逐字契约测试 | `ErrorMessageContract.test.ts`、`BasicCommands.test.ts` |
+| 成功编辑命令输出摘要，显示命令直接输出内容 | 各命令返回反馈行；`tree`/`show`/`help` 只读 | CLI 测试与 `examples/demo.txt` 实测输出 |
+| undo/redo：一命令一单元、复合整体撤销、显示命令跳过、文档类命令后禁止、新编辑清空 redo | 全部实现并用测试锁定 | `UndoRedo.test.ts` |
+| 两节点流程图案例可按附件命令顺序构建 | 命令顺序与树输出逐行比对通过 | `FlowchartCase.test.ts` |
+| `doc/README.md` 四节 + PlantUML 图 | 已具备（组件图 + 类图） | 本文档 |
+| 分阶段提交 + `final` 标签 | 9 个提交、逐提交推送；`final` 已推送并远程验证 | `git log`、`git ls-remote`（见最终报告） |
+
+### 4.6 已知限制（如实说明）
 
 1. **`box` 未实现**：按附件阶段边界，`create box …` 报
    `error: unknown shape type: box (is the plugin loaded?)`；`Container.isPluginComposite`
