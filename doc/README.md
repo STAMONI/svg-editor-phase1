@@ -26,10 +26,10 @@ node dist/src/index.js examples/flowchart.txt   # 回放脚本，生成 SVG
 | 目录 | 职责 | 主要类 |
 |---|---|---|
 | `src/errors/` | 统一错误类型，最底层 | `CliError`、`asCliError` |
-| `src/model/` | 领域模型：图形对象、类层次、容器树、文档根、几何与属性语义、ID 唯一性 | `Shape`（抽象组件）、`LeafShape`（抽象叶子）、`Rect`、`Circle`、`Ellipse`、`Line`、`TextShape`、`Container`（抽象组合）、`Group`、`Canvas`、`SvgDocument`、`Point`、`ShapeType`、`NumberCodec`、`AttributeLookup` |
-| `src/io/` | 与外部世界交换数据：XML 解析、SVG 读写、文件访问抽象 | `XmlElement`、`XmlParser`、`SvgReader`、`SvgWriter`、`SvgElementFactory`、`TextFileSystem`（接口）、`NodeFileSystem`（实现） |
+| `src/model/` | 领域模型：图形对象、类层次、容器树、文档根、几何与属性语义、ID 唯一性、图形工厂 | `Shape`（抽象组件）、`LeafShape`（抽象叶子）、`Rect`、`Circle`、`Ellipse`、`Line`、`TextShape`、`Container`（抽象组合）、`Group`、`Canvas`、`SvgDocument`、`ShapeFactory`（图形工厂）、`Point`、`ShapeType`、`NumberCodec`、`AttributeLookup` |
+| `src/io/` | 与外部世界交换数据：XML 解析、SVG 读写、文件访问抽象 | `XmlElement`、`XmlParser`、`SvgReader`、`SvgWriter`、`TextFileSystem`（接口）、`NodeFileSystem`（实现） |
 | `src/history/` | 撤销重做（Memento 快照）与「文档类命令后禁止」的锁定语义 | `UndoManager`、`HistoryEntry` |
-| `src/commands/` | Command 模式落地：命令接口、具体命令、命令注册与分发、参数解析、会话编排 | `Command`（接口）、`CommandRegistry`、`CommandLineParser`、`EditorSession`、`ShapeFactory`，以及 `document/`、`edit/`、`query/`、`history/`、`system/` 下的各具体命令、`TreeRenderer` |
+| `src/commands/` | Command 模式落地：命令接口、具体命令、命令注册与分发、参数解析、会话编排 | `Command`（接口）、`CommandRegistry`、`CommandLineParser`、`EditorSession`，以及 `document/`、`edit/`、`query/`、`history/`、`system/` 下的各具体命令、`TreeRenderer` |
 | `src/cli/` | 交互层：REPL、提示符、输出、组合根 | `Repl`、`EditorApplication`（组合根） |
 | `src/index.ts` | 进程入口（交互模式 / 脚本回放模式） | — |
 | `test/` | 自动化测试（`node --test` 驱动） | 11 个测试文件 + 2 个测试辅助类 |
@@ -56,7 +56,6 @@ package "commands" {
   [EditCommands] as EditCmd
   [QueryCommands] as QueryCmd
   [Undo/RedoCommand] as HistCmd
-  [ShapeFactory] as Factory
   [TreeRenderer] as Tree
 }
 package "history" {
@@ -66,7 +65,6 @@ package "io" {
   [SvgReader] as Reader
   [SvgWriter] as Writer
   [XmlParser] as Xml
-  [SvgElementFactory] as ElFactory
   [TextFileSystem <<interface>>] as FS
 }
 package "model" {
@@ -77,6 +75,7 @@ package "model" {
   [Rect/Circle/Ellipse/Line/TextShape] as Leaves
   [Container <<abstract>>] as Container
   [Group] as Group
+  [ShapeFactory] as Factory
 }
 package "errors" {
   [CliError] as Err
@@ -105,9 +104,9 @@ Undo --> Doc
 Reader --> Doc
 Writer --> Doc
 Reader --> Xml
-Reader --> ElFactory
-ElFactory --> Leaves
-ElFactory --> Group
+Reader --> Factory
+Factory --> Leaves
+Factory --> Group
 Reader ..> FS
 Writer ..> FS
 Doc *-- Canvas
@@ -228,15 +227,17 @@ Shape --> Container : parent
 
 **4) Factory（图形工厂，按名分派点之二）**
 
-- `ShapeFactory`：类型名 + 参数 token → 具体图形对象，集中校验六种内置类型的参数格式；
-  `create box` 在此统一报 `unknown shape type: box (is the plugin loaded?)`。
-- `SvgElementFactory`：SVG 元素名 → `Rect.createFromSvg` 等多态静态工厂的注册表。
-  读入时若用 `switch(tag)` 会把分派散到 IO 层，因此每个图形类自己负责「如何从 SVG 属性
-  构造自己」，注册表只做名字查找。
-
-> 两处按名分派点（`CommandRegistry`、`ShapeFactory` / `SvgElementFactory`）均集中在一处、
-> 只做查找，不在其中实现图形行为。它们已标注为**待重构点**：插件化阶段会用
-> `ShapeProvider` 注册表替换图形工厂，`box` 等新类型无需修改内核。
+- `ShapeFactory`（`src/model/ShapeFactory.ts`）是系统**唯一**的图形工厂，只有两个创建入口：
+  - `createFromTokens(typeName, id, params)`：CLI 类型名 + 参数 token → 图形（`create` 命令使用）；
+  - `createFromSvgElement(localName, id, attributes, content)`：SVG 元素名 + 属性 → 图形
+    （`SvgReader` 导入时使用），内部委托各图形类的多态静态工厂 `createFromSvg`。
+- 因此系统里**只有两处**按名字分派：`CommandRegistry`（命令名 → 实现）与 `ShapeFactory`
+  （图形类型 / 元素名 → 类），符合附件「按名字分派只允许两处」的要求。阶段 10 的作业审计
+  合并了此前独立的 `SvgElementFactory`（导入侧注册表），避免出现第三个分派点；工厂放在
+  `model` 层，使 `commands` 与 `io` 都能依赖它而不违反分层。
+- `create box` 在同一工厂中统一报 `unknown shape type: box (is the plugin loaded?)`。
+- 两处均标注为**待重构点**：插件化阶段会用 `ShapeProvider` 注册表替换图形工厂，
+  `box` 等新类型无需修改内核。
 
 ### 1.5 依赖方向规则
 
@@ -270,7 +271,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 
 | 变化点 | 假设 | 是否预留扩展点 |
 |---|---|---|
-| 图形类型扩展（插件化 `box`） | 下一阶段引入 `ShapeProvider` 插件注册表 | 是：工厂集中在 `ShapeFactory` / `SvgElementFactory`；`Container.isPluginComposite` 钩子让 `box` 可继承容器并拒绝 `ungroup`；`ungroup` 已按「插件复合类型拒绝解散」实现 |
+| 图形类型扩展（插件化 `box`） | 下一阶段引入 `ShapeProvider` 插件注册表 | 是：工厂集中在唯一的 `model/ShapeFactory`（CLI 与 SVG 两个入口）；`Container.isPluginComposite` 钩子让 `box` 可继承容器并拒绝 `ungroup`；`ungroup` 已按「插件复合类型拒绝解散」实现 |
 | 命令语法增加 | 命令会继续增加 | 是：命令自包含解析与校验，`CommandRegistry` 注册即生效，`help` 自动列出 |
 | 显示格式调整 | `tree` / `show` 排版可能改 | 是：格式收敛在 `Shape.describeInline()` / `describeDetails()` 与 `TreeRenderer` |
 | 序列化标记（`data-kind`） | 插件类型需要持久化标记 | 部分：`Shape.attributeEntries()` 由子类决定属性，插件可在子类中增加 `data-kind`；本阶段内置类型不写额外标记 |
@@ -286,7 +287,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | `read` | `document/ReadCommand` | document |
 | `save` | `document/SaveCommand` | document |
 | `canvas` | `document/CanvasCommand` | query / document（按有无参数动态判定） |
-| `create` | `edit/CreateCommand` + `factories/ShapeFactory` | edit |
+| `create` | `edit/CreateCommand` + `model/ShapeFactory` | edit |
 | `delete` | `edit/DeleteCommand` | edit |
 | `move` | `edit/MoveCommand` | edit |
 | `scale` | `edit/ScaleCommand` | edit |
@@ -319,6 +320,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 文件不存在 / 不可写 | `error: cannot read file: a.svg` / `error: cannot write file: a.svg` | `SvgReader` / `SvgWriter` | `ErrorMessageContract` |
 | 未 read/init 就执行其他命令 | `error: no document. use 'init' or 'read' first` | `EditorSession.execute` | `ErrorMessageContract` |
 | 白名单之外的属性 | `error: unknown attribute: opacity` | `Shape.setAttribute` | `ErrorMessageContract` |
+| id 含空白（本实现扩展校验） | `error: invalid id: a b` | `Shape` 构造器 | `ErrorMessageContract` |
 | 文档类命令后 undo/redo | `error: undo not allowed after io command`（redo 同构） | `UndoManager.assertUnlocked` | `ErrorMessageContract` |
 
 说明：`box` 属后续插件阶段，本阶段不会出现真正的复合图形对象；`cannot ungroup composite shape`
@@ -397,8 +399,9 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 - 真实修正：`canvas` 无参数时是查询、有参数时是文档级命令；若把 `category` 写死会导致
   「查询也会锁历史」。于是给 `Command` 增加可选的 `categoryFor(args)`，由会话层动态判定。
 - 读入侧设计：为避免出现第三处 `switch(tag)`，每个图形类增加多态静态工厂
-  `createFromSvg(id, attributes)`，`SvgElementFactory` 只做名字 → 工厂的注册表；
-  XML 解析器自研（无第三方依赖），支持声明/注释/CDATA/DOCTYPE/实体/命名空间前缀。
+  `createFromSvg(id, attributes)`，当时由独立的 `SvgElementFactory` 注册表消费（阶段 10 审计时
+  已并入唯一的 `model/ShapeFactory`，见 2.10）；XML 解析器自研（无第三方依赖），支持
+  声明/注释/CDATA/DOCTYPE/实体/命名空间前缀。
 - 测试：新增 `UndoRedo`（11 项）与 `SvgPersistence`（9 项），总数到 56 项全绿。
 
 ### 2.6 阶段 6：查询命令与测试完善（`feat: add tree/show/help queries with full CLI test coverage`）
@@ -406,9 +409,9 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 - 实现 `tree`（`TreeRenderer`：全局对齐列宽、子树、容器内联样式）、`show`（父容器 + 分组属性）、
   `help`（从注册表自动生成分组语法表）。
 - 真实缺陷（测试发现）：手算 `tree` 对齐列宽错误（我按 36 列写期望，实际 32 列），
-  测试失败后修正；同时发现 `line` 的 `stroke=black` 在附件示例的树里没有显示，而本实现显示
-  所有显式设置的样式属性。决定**保留显示**（信息更完整，与 `show` 一致），并在测试注释中
-  说明这一有意差异。
+  测试失败后修正；同时发现 `line` 的 `stroke=black` 在附件示例的树里没有显示，而当时实现
+  显示了所有显式样式属性，于是决定**保留显示**（信息更完整）。阶段 10 对照附件重新审计后
+  改为与示例一致：`tree` 只内联 `fill`，`stroke` 等完整样式由 `show` 展示（见 2.10）。
 - 真实缺陷（脚本自检发现）：`check-layering.mjs` 初版误报 `history → errors`（规则漏写）和
   `src/index.ts` 层名未知（入口文件未归类）；修正规则后输出 `layering check passed (53 files)`。
 - 真实环境问题：用 PowerShell 5.1 的 `Get-Content` 查看生成 SVG 时中文乱码，一度怀疑编码
@@ -473,6 +476,28 @@ errors  ←  model  ←  io  ←  commands  ←  cli
   `examples/demo.txt` 全部真实运行通过。
 - 测试总数 83 → 88（新增百分比回退、px 单位、空白 id、文本转义、多行文本 5 项），无功能范围变化。
 
+### 2.10 阶段 10：对照附件逐条审计与提交流程补齐（`refactor:` / `docs:` 两个提交）
+
+- 动机：用户要求「检查是否作业内的所有要求均已达到」。于是按附件章节逐条核对命令表、通用约定、
+  实现范式、错误表、显示格式与 git 要求，发现 **3 处与附件严格表述不一致**（功能行为本身正确，
+  但形式/结构未完全贴合）：
+  1. **`tree` 显示格式**：此前内联了显式设置的 `stroke` / `stroke-width`，与附件 5.1、6.1 的
+     示例输出不完全一致（示例中 line 只显示坐标）。修复：`tree` 只内联几何属性 + `fill`
+     （与示例逐字一致），`stroke` 等完整样式由 `show` 展示；同时在流程图验收用例中增加
+     `show arrow1` 断言，保证信息没有丢失。
+  2. **按名分派点数量**：附件只允许两处（命令分发、图形工厂），此前实际存在三个注册表
+     （命令、CLI 图形工厂、SVG 元素工厂）。修复：合并为唯一的 `model/ShapeFactory`，提供
+     `createFromTokens` 与 `createFromSvgElement` 两个入口，分派点回到两处；工厂下沉到
+     `model` 层使 `commands` 与 `io` 都能依赖且不违反分层。
+  3. **类文件中的自由函数**：`asCliError`、`countDescendants` 是散落的自由函数。修复：分别
+     收进 `CliError.normalize` 静态方法与 `Container.descendantCount` 方法，强化「一类一文件 +
+     类封装」的实现范式。
+- 补测 7 项契约用例：`read` 后 undo 锁定、显示命令不清空 redo、注释/空行无输出、容器 `set`
+  样式、未设置 `fill`/`stroke` 时保存不写该属性、带空格路径的 save/read、`tree` 只含 fill 而
+  `show` 含 stroke。
+- 结果：测试 88 → 95 全绿；依赖检查 `layering check passed (52 files)`；其他要求复核后未发现
+  新的不一致。
+
 ---
 
 ## 3. 一致性自查
@@ -484,14 +509,15 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 方案初版 | 实际实现 | 说明 |
 |---|---|---|
 | `io/FileSystem` 一件事 | `TextFileSystem`（接口）+ `NodeFileSystem`（实现） | 接口与实现分离，测试用内存实现替换 |
-| 未列出 | `io/SvgElementFactory` | 读入侧「元素名 → 多态构造」的注册表，避免第三处 switch |
+| 未列出（阶段 5 引入） | `model/ShapeFactory`（阶段 10 从 `commands/factories/ShapeFactory` 与 `io/SvgElementFactory` 合并而来） | 唯一的图形工厂，含 CLI 与 SVG 两个创建入口；保证按名分派只有两处 |
 | 未列出 | `model/Point`、`model/NumberCodec`、`model/AttributeLookup` | 值对象与数值/属性读取工具，属细节类 |
 | 未列出 | `commands/query/TreeRenderer` | `tree` 的排版渲染，从命令中抽出便于单测与复用 |
 | 未列出 | `commands/document/CanvasCommand`、`history/UndoCommand`、`history/RedoCommand`、`system/ExitCommand` | 阶段 4～6 实现过程中新增的命令 |
 | `cli` 只依赖 `commands` | `cli/EditorApplication` 作为组合根，直接装配 `io` 实现 | 组合根例外，已写入 1.5 规则；`cli` 仍不写业务逻辑 |
 
 目录实际布局与 1.1 节所列为准（阶段 7 已按实际实现更新 1.1、1.2、1.5、1.7 节；阶段 8 又补充了
-1.3 类图与 1.8 错误契约表，因此该节编号在阶段 8 之后为 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8）。
+1.3 类图与 1.8 错误契约表；阶段 10 按审计结果更新 1.1、1.2、1.4、1.8，因此该节编号在阶段 10
+之后为 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.8）。
 
 ### 3.2 依赖方向：方案规则有没有被违反？
 
@@ -517,8 +543,8 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 
 - `tsconfig.json`：`strict`、`noImplicitOverride`、`noUnusedLocals`、`noUnusedParameters`、
   `noFallthroughCasesInSwitch`、`forceConsistentCasingInFileNames`，目标 ES2022 / CommonJS。
-- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 9 最终执行
-  `npm run verify`（构建 + 依赖方向检查 + 88 项测试），全部通过。
+- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 10 最终执行
+  `npm run verify`（构建 + 依赖方向检查 + 95 项测试），全部通过。
 
 ### 4.2 自动化测试
 
@@ -539,6 +565,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 6 查询与最终 | 67 | 全绿 |
 | 8 交付强化（错误契约 + 边界） | 83 | 全绿 |
 | 9 运行性修复（百分比尺寸、文本转义、空白 id 等） | 88 | 全绿 |
+| 10 需求审计与格式对齐（tree 格式、单一工厂、契约补测） | 95 | 全绿 |
 
 覆盖附件第 5 节的 10 类验收场景：
 
@@ -558,10 +585,12 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 补充：复合操作边界（跨父分组、位置提升、嵌套 z-order、缩放撤销） | `test/cli/CompositeEdgeCases.test.ts` |
 | 补充：SVG 导入边界（未知元素、viewBox 回退、引号/CDATA/实体、忽略属性） | `test/io/SvgImportEdgeCases.test.ts` |
 | 补充：百分比尺寸回退 viewBox、px 单位、空白 id 拒绝、文本转义/多行 | `test/io/SvgImportEdgeCases.test.ts`、`test/cli/QueryCommands.test.ts`、`ErrorMessageContract.test.ts` |
+| 补充：显示格式（tree 只内联几何+fill，show 含完整样式） | `test/cli/QueryCommands.test.ts`、`test/cli/FlowchartCase.test.ts` |
 
 异常/边界专项：未初始化文档、未闭合引号、非法数字、非正缩放、未知属性、`box` 未注册、
 顶层容器不能 ungroup、容器入自身子孙、文件不可写、非法 XML、重复 ID 读入、中文文本往返、
-插件复合类型 `ungroup` 钩子契约、未支持元素/属性静默跳过。
+插件复合类型 `ungroup` 钩子契约、未支持元素/属性静默跳过、注释/空行、带空格文件路径、
+未设置样式不写属性、显示命令不清空 redo 栈。
 
 ### 4.3 手动 CLI 验证（真实输出摘录）
 
@@ -585,12 +614,14 @@ svg (800x600)
     ├── g#node2
     │   ├── rect#process        x=520 y=100 w=160 h=60 fill=#f5a623
     │   └── text#process-label  (545,135) "处理数据"
-    └── line#arrow1             (280,130) -> (520,130) stroke=black
+    └── line#arrow1             (280,130) -> (520,130)
 g#node2 moved by (0,100)
 g#node2 moved back by (0,-100)
 text#process-label updated: text="处理数据 v2"
 saved to examples/flowchart.svg (8 elements)
 ```
+
+该 `tree` 输出与附件 6.1 的示例逐字一致（`line` 的 `stroke` 只出现在 `show arrow1` 的明细里）。
 
 `README` 中 `examples/flowchart.svg` 即该次运行生成，可直接用浏览器打开预览（合法 SVG，
 无 BOM，UTF-8）。用 CLI `read examples/flowchart.svg` 回读后 `tree` 输出与原树完全一致。
@@ -604,10 +635,10 @@ saved to examples/flowchart.svg (8 elements)
 - 回归：每个阶段都在前一阶段测试全绿的基础上追加新测试，从未出现「修新坏旧」后未修复的提交；
   保存→读取往返、中文往返、撤销→重做往返均作为回归用例固化。
 - 依赖方向检查：`npm run check:layering`（`layering check passed (53 files)`）。
-- 提交纪律：共 13 个提交（7 个阶段 + 阶段 8 的 3 个强化提交 + 阶段 9 的 3 个可运行性修复提交）
-  逐提交推送；每个提交前实际执行构建与测试；提交信息与内容对应，未使用 `reset --hard` /
-  强制推送分支 / 空提交 / 修改提交时间。
-  `final` 标签在阶段 8、阶段 9 之后均被移动到最新提交（仍是同一条线性历史的末端，
+- 提交纪律：共 15 个提交（7 个阶段 + 阶段 8 的 3 个强化提交 + 阶段 9 的 3 个可运行性修复提交
+  + 阶段 10 的 2 个审计对齐提交）逐提交推送；每个提交前实际执行构建与测试；提交信息与内容对应，
+  未使用 `reset --hard` / 强制推送分支 / 空提交 / 修改提交时间。
+  `final` 标签在阶段 8、阶段 9、阶段 10 之后均被移动到最新提交（仍是同一条线性历史的末端，
   **没有重写或压缩历史**）。
 
 ### 4.5 需求验收清单（附件逐条对照）
@@ -624,9 +655,11 @@ saved to examples/flowchart.svg (8 elements)
 | 成功编辑命令输出摘要，显示命令直接输出内容 | 各命令返回反馈行；`tree`/`show`/`help` 只读 | CLI 测试与 `examples/demo.txt` 实测输出 |
 | undo/redo：一命令一单元、复合整体撤销、显示命令跳过、文档类命令后禁止、新编辑清空 redo | 全部实现并用测试锁定 | `UndoRedo.test.ts` |
 | 两节点流程图案例可按附件命令顺序构建 | 命令顺序与树输出逐行比对通过 | `FlowchartCase.test.ts` |
+| 命令总表 19 条命令、语法与反馈格式 | 全部实现；`help` 由注册表生成完整语法表；成功反馈与附件 transcript 一致 | `QueryCommands.test.ts`、各 CLI 测试 |
+| 按名字分派只允许两处（命令分发 + 图形工厂） | `CommandRegistry` 与 `model/ShapeFactory` 两处；阶段 10 合并了多余的第三个分派表 | 本文档 1.4、`layering` 检查、阶段 10 记录 |
 | `doc/README.md` 四节 + PlantUML 图 | 已具备（组件图 + 类图） | 本文档 |
 | 项目可直接运行（clone → install → build → test → CLI） | 清空 `node_modules`/`dist` 后重新安装并全量验证通过 | 阶段 9 记录、`npm run verify`、CLI 实测 |
-| 分阶段提交 + `final` 标签 | 13 个提交、逐提交推送；`final` 已推送并远程验证 | `git log`、`git ls-remote`（见最终报告） |
+| 分阶段提交 + `final` 标签 | 15 个提交、逐提交推送；`final` 已推送并远程验证 | `git log`、`git ls-remote`（见最终报告） |
 
 ### 4.6 已知限制（如实说明）
 
@@ -636,8 +669,8 @@ saved to examples/flowchart.svg (8 elements)
 2. **只支持六种内置类型的核心属性**：读入外部 SVG 时忽略 `transform`、`style`、`path`、
    `tspan` 等；未知元素（`title`/`defs`/`path` 等）静默跳过，不报错。
 3. **属性白名单之外的 `set` 一律报错**（按需求）；不支持 `opacity`、`font-size` 等属性。
-4. **`tree` 显示所有显式设置的样式属性**（含 `stroke`），附件示例中 `line` 未显示 `stroke`，
-   这是本实现有意提供更完整信息的差异（`show` 输出同样包含）。
+4. **`tree` 与附件示例格式一致**：内联几何属性 + `fill`；`stroke` / `stroke-width` 等完整
+   样式由 `show` 展示（阶段 10 按附件示例对齐，此前版本曾在 tree 中多显示 stroke）。
 5. **撤销为整文档快照**，大文档（数千图形）下内存与耗时随文档规模线性增长；本阶段规模下
    是可接受的取舍。
 6. **顶层容器不能 `ungroup`**（附件错误表要求），因此顶层 `g` 需要先 `addto` 到其他容器或

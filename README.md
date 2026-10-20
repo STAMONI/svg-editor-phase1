@@ -10,7 +10,7 @@ TypeScript / OOP / Command-pattern implementation of the phase 1 SVG editor CLI.
 ```bash
 npm install
 npm run cli            # interactive REPL, prompt "svg> "
-npm run verify         # build + layering check + all automated tests (88 tests)
+npm run verify         # build + layering check + all automated tests (95 tests)
 ```
 
 Requires Node.js >= 20 (no runtime dependencies; tests use the built-in `node:test`).
@@ -64,12 +64,12 @@ All errors start with `error:`; a failed command never changes the document.
 
 ```
 src/errors   CliError
-src/model    Shape hierarchy, Container/Group, Canvas, SvgDocument
+src/model    Shape hierarchy, Container/Group, Canvas, SvgDocument, ShapeFactory
 src/io       XML parser, SVG reader/writer, file system abstraction
 src/history  snapshot based undo/redo (Memento)
 src/commands Command interface, registry, parser, session, concrete commands
 src/cli      REPL and composition root
-test/        node:test suites (88 tests across 11 files)
+test/        node:test suites (95 tests across 11 files)
 examples/    replayable command scripts + sample SVG files
 scripts/     layering check + in-process test runner
 ```
