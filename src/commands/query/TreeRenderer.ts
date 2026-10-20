@@ -16,7 +16,8 @@ interface TreeEntry {
  * - every shape shows its key geometry inline (`x=… y=… w=… h=…`,
  *   `cx=… cy=… r=…`, `(x,y) "text"`, `(x1,y1) -> (x2,y2)`);
  * - the attribute column is aligned over the whole tree, containers show only
- *   their id (plus style attributes when set).
+ *   their id; leaf shapes inline geometry and (when set) the fill colour, which
+ *   matches the documented sample output — stroke details belong to `show`.
  */
 export class TreeRenderer {
   /** @throws CliError `no such shape: <id>` for unknown subtree roots */

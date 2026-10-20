@@ -7,11 +7,9 @@ import { EditorHarness } from "../support/EditorHarness";
 
 /**
  * Section 6.1 of the assignment: two node flowchart built with the `in`
- * clause. This is the acceptance case for Composite semantics.
- *
- * Note: unlike the shortened excerpt in the assignment, the tree also prints
- * explicitly set stroke attributes (the arrow has `stroke=black`), which makes
- * the inline view complete; `show` prints the same attribute groups.
+ * clause. This is the acceptance case for Composite semantics. The `tree`
+ * output matches the documented sample exactly (the arrow's stroke is part of
+ * the file but not of the inline tree format; `show` prints it).
  */
 const FLOWCHART_TREE = [
   "svg (800x600)",
@@ -22,7 +20,7 @@ const FLOWCHART_TREE = [
   "    ├── g#node2",
   "    │   ├── rect#process" + " ".repeat(8) + "x=520 y=100 w=160 h=60 fill=#f5a623",
   '    │   └── text#process-label' + " ".repeat(2) + '(545,135) "处理数据"',
-  "    └── line#arrow1" + " ".repeat(13) + "(280,130) -> (520,130) stroke=black",
+  "    └── line#arrow1" + " ".repeat(13) + "(280,130) -> (520,130)",
 ];
 
 function buildFlowchart(editor: EditorHarness): void {
@@ -43,6 +41,12 @@ test("two node flowchart builds into the documented tree", () => {
   const editor = new EditorHarness();
   buildFlowchart(editor);
   assert.deepEqual(editor.run("tree"), FLOWCHART_TREE);
+  // stroke is not part of the inline tree format but must stay visible in show
+  assert.deepEqual(editor.run("show arrow1"), [
+    "line#arrow1  parent=g#flowchart",
+    "  (280,130) -> (520,130)",
+    "  stroke=black",
+  ]);
   const document = editor.session.document;
   assert.equal(document.elementCount(), 8);
   assert.deepEqual(

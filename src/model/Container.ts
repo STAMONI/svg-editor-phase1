@@ -113,6 +113,18 @@ export abstract class Container extends Shape {
     return false;
   }
 
+  /** Number of shapes below this container (descendants, not including it). */
+  public descendantCount(): number {
+    let total = 0;
+    for (const child of this.childShapes) {
+      total += 1;
+      if (child instanceof Container) {
+        total += child.descendantCount();
+      }
+    }
+    return total;
+  }
+
   protected override describeGeometry(): string {
     return "";
   }

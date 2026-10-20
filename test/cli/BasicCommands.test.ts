@@ -156,3 +156,21 @@ test("exit stops the repl loop", () => {
   editor.run("exit");
   assert.equal(editor.session.exitRequested, true);
 });
+
+test("comment lines and blank lines produce no output", () => {
+  const editor = new EditorHarness();
+  assert.deepEqual(editor.run("# a comment"), []);
+  assert.deepEqual(editor.run(""), []);
+  assert.deepEqual(editor.run("   "), []);
+});
+
+test("set applies to container style attributes (composite semantics)", () => {
+  const editor = new EditorHarness();
+  editor.runLines("init", "create g g1", "create rect r1 0 0 10 10 in g1");
+  assert.deepEqual(editor.run("set g1 fill red"), ["g#g1 updated: fill=red"]);
+  assert.deepEqual(editor.run("tree"), [
+    "svg (800x600)",
+    "└── g#g1" + " ".repeat(9) + "fill=red",
+    "    └── rect#r1" + " ".repeat(2) + "x=0 y=0 w=10 h=10",
+  ]);
+});

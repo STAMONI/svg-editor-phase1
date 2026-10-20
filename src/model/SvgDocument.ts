@@ -109,7 +109,7 @@ export class SvgDocument {
 
   /** Number of shapes in the document, excluding the canvas element. */
   public elementCount(): number {
-    return countDescendants(this.canvasInstance);
+    return this.canvasInstance.descendantCount();
   }
 
   /** Deep copy used by the undo manager (Memento). */
@@ -120,15 +120,4 @@ export class SvgDocument {
     }
     return copy;
   }
-}
-
-function countDescendants(container: Container): number {
-  let total = 0;
-  for (const child of container.children) {
-    total += 1;
-    if (child instanceof Container) {
-      total += countDescendants(child);
-    }
-  }
-  return total;
 }

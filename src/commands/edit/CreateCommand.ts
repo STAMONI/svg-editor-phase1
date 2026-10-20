@@ -1,7 +1,7 @@
 import { CliError } from "../../errors/CliError";
 import type { Command, CommandResult } from "../Command";
 import type { EditorSession } from "../EditorSession";
-import type { ShapeFactory } from "../factories/ShapeFactory";
+import type { ShapeFactory } from "../../model/ShapeFactory";
 
 /**
  * Parsed form of the optional trailing `in <containerId>` clause.
@@ -49,7 +49,7 @@ export class CreateCommand implements Command {
       parsed.containerId === null
         ? null
         : document.requireContainer(parsed.containerId);
-    const shape = this.factory.create(typeName, id, parsed.params);
+    const shape = this.factory.createFromTokens(typeName, id, parsed.params);
     document.attachShape(shape, parent);
 
     const target = parent === null ? "" : ` in ${parent.type}#${parent.id}`;

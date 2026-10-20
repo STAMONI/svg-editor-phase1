@@ -178,16 +178,21 @@ export abstract class Shape {
     return entries;
   }
 
-  /** Inline description used by `tree`. */
+  /**
+   * Inline description used by `tree`: geometry plus fill.
+   *
+   * The assignment's tree examples inline the key geometry and (when set) the
+   * fill colour; stroke / stroke-width stay out of the tree and are shown in
+   * full by `show`, so the tree matches the documented format exactly.
+   */
   public describeInline(): string {
     const parts: string[] = [];
     const geometry = this.describeGeometry();
     if (geometry.length > 0) {
       parts.push(geometry);
     }
-    const style = this.describeStyle();
-    if (style.length > 0) {
-      parts.push(style);
+    if (this.fillValue !== null) {
+      parts.push(`fill=${this.fillValue}`);
     }
     return parts.join(" ");
   }

@@ -160,3 +160,18 @@ second</text>
   assert.ok(tree[1].includes('"first\\nsecond"'));
 });
 
+test("tree inlines fill but leaves stroke details to show", () => {
+  const editor = new EditorHarness();
+  editor.runLines("init", "create rect r1 0 0 10 10 #eee");
+  editor.run("set r1 stroke red");
+  assert.deepEqual(editor.run("tree"), [
+    "svg (800x600)",
+    "└── rect#r1  x=0 y=0 w=10 h=10 fill=#eee",
+  ]);
+  assert.deepEqual(editor.run("show r1"), [
+    "rect#r1  parent=svg",
+    "  x=0 y=0 w=10 h=10",
+    "  fill=#eee stroke=red",
+  ]);
+});
+

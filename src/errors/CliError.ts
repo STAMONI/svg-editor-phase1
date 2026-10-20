@@ -10,15 +10,15 @@ export class CliError extends Error {
     super(message);
     this.name = "CliError";
   }
-}
 
-/** Normalizes an unknown thrown value into a CliError. */
-export function asCliError(error: unknown): CliError {
-  if (error instanceof CliError) {
-    return error;
+  /** Normalizes an unknown thrown value into a CliError. */
+  public static normalize(error: unknown): CliError {
+    if (error instanceof CliError) {
+      return error;
+    }
+    if (error instanceof Error) {
+      return new CliError(error.message);
+    }
+    return new CliError(String(error));
   }
-  if (error instanceof Error) {
-    return new CliError(error.message);
-  }
-  return new CliError(String(error));
 }

@@ -170,3 +170,34 @@ test("reading collapses duplicate ids into fresh ones with a warning", () => {
     "read dup.svg (2 elements)",
   ]);
 });
+
+test("optional fill and stroke are omitted from the saved SVG when unset", () => {
+  const editor = new EditorHarness();
+  assert.deepEqual(
+    editor.runLines(
+      "init",
+      "create rect r1 0 0 10 10",
+      "create circle c1 5 5 2",
+      "create line l1 0 0 1 1",
+      "save plain.svg",
+    ),
+    [
+      "canvas 800x600 created",
+      "rect#r1 created",
+      "circle#c1 created",
+      "line#l1 created",
+      "saved to plain.svg (3 elements)",
+    ],
+  );
+  const content = editor.fileSystem.getFile("plain.svg") ?? "";
+  assert.ok(!content.includes("fill="));
+  assert.ok(!content.includes("stroke="));
+});
+
+test("quoted file paths containing spaces work for save and read", () => {
+  const editor = new EditorHarness();
+  editor.runLines("init", "create rect r1 0 0 10 10", 'save "my file.svg"');
+  assert.equal(editor.session.currentPath, "my file.svg");
+  editor.runLines("init", 'read "my file.svg"');
+  assert.equal(editor.session.document.elementCount(), 1);
+});

@@ -1,6 +1,6 @@
 import * as readline from "node:readline";
 
-import { asCliError } from "../errors/CliError";
+import { CliError } from "../errors/CliError";
 import type { CommandLineParser } from "../commands/CommandLineParser";
 import type { CommandRegistry } from "../commands/CommandRegistry";
 import type { EditorSession } from "../commands/EditorSession";
@@ -31,7 +31,7 @@ export class Repl {
     try {
       parsed = this.parser.parse(line);
     } catch (error) {
-      this.out(`error: ${asCliError(error).message}`);
+      this.out(`error: ${CliError.normalize(error).message}`);
       return;
     }
     if (parsed === null) {
@@ -44,7 +44,7 @@ export class Repl {
         this.out(line);
       }
     } catch (error) {
-      this.out(`error: ${asCliError(error).message}`);
+      this.out(`error: ${CliError.normalize(error).message}`);
     }
   }
 

@@ -3,8 +3,8 @@ import type { AttributeLookup } from "../model/AttributeLookup";
 import { Container } from "../model/Container";
 import { parseNumber } from "../model/NumberCodec";
 import type { Shape } from "../model/Shape";
+import { ShapeFactory } from "../model/ShapeFactory";
 import { SvgDocument } from "../model/SvgDocument";
-import { SvgElementFactory } from "./SvgElementFactory";
 import type { TextFileSystem } from "./TextFileSystem";
 import { XmlElement } from "./XmlElement";
 import { XmlParser } from "./XmlParser";
@@ -37,7 +37,7 @@ const DEFAULT_HEIGHT = 600;
  */
 export class SvgReader {
   private readonly parser = new XmlParser();
-  private readonly factory = new SvgElementFactory();
+  private readonly factory = new ShapeFactory();
 
   public constructor(private readonly fileSystem: TextFileSystem) {}
 
@@ -101,12 +101,17 @@ export class SvgReader {
     context: ReadContext,
   ): void {
     const local = SvgReader.localName(element.name);
-    if (!this.factory.supports(local)) {
+    if (!this.factory.supportsSvgElement(local)) {
       return;
     }
     const id = this.assignId(element, local, context);
     const attributes: AttributeLookup = (name) => element.getAttribute(name);
-    const shape = this.factory.create(local, id, attributes, element.text);
+    const shape = this.factory.createFromSvgElement(
+      local,
+      id,
+      attributes,
+      element.text,
+    );
     this.applyPresentation(shape, attributes);
     document.attachShape(shape, parent);
 

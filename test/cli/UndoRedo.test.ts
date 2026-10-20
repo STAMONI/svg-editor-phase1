@@ -128,3 +128,27 @@ test("undo/redo with nothing to restore reports a clear error", () => {
   editor.runLines("init", "create rect r1 0 0 10 10", "undo");
   assert.deepEqual(editor.run("undo"), ["error: nothing to undo"]);
 });
+
+test("read locks undo until the next edit", () => {
+  const editor = new EditorHarness();
+  editor.fileSystem.putFile(
+    "doc.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <rect id="r1" x="0" y="0" width="10" height="10"/>
+    </svg>`,
+  );
+  editor.run("read doc.svg");
+  assert.deepEqual(editor.run("undo"), [
+    "error: undo not allowed after io command",
+  ]);
+  editor.run("create circle c1 0 0 5");
+  assert.deepEqual(editor.run("undo"), ["circle#c1 removed"]);
+});
+
+test("display commands do not clear the redo stack", () => {
+  const editor = new EditorHarness();
+  editor.runLines("init", "create rect r1 0 0 10 10");
+  editor.run("undo");
+  editor.runLines("tree", "canvas", "help");
+  assert.deepEqual(editor.run("redo"), ["rect#r1 created"]);
+});

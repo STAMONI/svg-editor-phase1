@@ -1,31 +1,57 @@
-import { CliError } from "../../errors/CliError";
-import { Circle } from "../../model/Circle";
-import { Ellipse } from "../../model/Ellipse";
-import { Group } from "../../model/Group";
-import { Line } from "../../model/Line";
-import {
-  parseNumber,
-  parsePositiveNumber,
-} from "../../model/NumberCodec";
-import { Rect } from "../../model/Rect";
-import type { Shape } from "../../model/Shape";
-import { TextShape } from "../../model/TextShape";
+import { CliError } from "../errors/CliError";
+import type { AttributeLookup } from "./AttributeLookup";
+import { Circle } from "./Circle";
+import { Ellipse } from "./Ellipse";
+import { Group } from "./Group";
+import { Line } from "./Line";
+import { parseNumber, parsePositiveNumber } from "./NumberCodec";
+import { Rect } from "./Rect";
+import type { Shape } from "./Shape";
+import { TextShape } from "./TextShape";
+
+type SvgShapeBuilder = (
+  id: string,
+  attributes: AttributeLookup,
+  content: string,
+) => Shape;
 
 /**
- * Factory for the six built-in shape types.
+ * The single shape factory of the system (one of the two allowed "dispatch by
+ * name" points, next to CommandRegistry).
  *
- * This is the second allowed "dispatch by name" point of the architecture
- * (the first one is CommandRegistry): it converts a type name plus raw
- * argument tokens into a fully validated domain object. Parameter validation
- * happens here, before the shape exists, so a failed `create` cannot leave a
- * half-built object behind.
+ * It has two creation entry points for the same set of built-in types:
+ * - `createFromTokens`: CLI tokens (`create <type> <id> [params…]`), validating
+ *   the positional parameter schema before a shape object exists;
+ * - `createFromSvgElement`: attributes of an imported SVG element, delegating
+ *   to the polymorphic `createFromSvg` factory of each model class.
  *
- * Deliberately marked as a future refactoring point: the pluginization phase
- * will replace this switch with a ShapeProvider registry so new shape types can
- * be added without touching the kernel.
+ * Both directions live in one class on purpose: the assignment allows exactly
+ * two name based dispatch points, and import/export must not introduce a third
+ * one. It is deliberately flagged as a future refactoring point: the plugin
+ * phase will replace the switch with a ShapeProvider registry so new shape
+ * types can be added without touching the kernel.
  */
 export class ShapeFactory {
-  public create(typeName: string, id: string, params: readonly string[]): Shape {
+  /** SVG element name -> polymorphic model constructor (import side). */
+  private readonly svgBuilders = new Map<string, SvgShapeBuilder>([
+    ["rect", (id, attributes) => Rect.createFromSvg(id, attributes)],
+    ["circle", (id, attributes) => Circle.createFromSvg(id, attributes)],
+    ["ellipse", (id, attributes) => Ellipse.createFromSvg(id, attributes)],
+    ["line", (id, attributes) => Line.createFromSvg(id, attributes)],
+    [
+      "text",
+      (id, attributes, content) =>
+        TextShape.createFromSvg(id, attributes, content),
+    ],
+    ["g", (id, attributes) => Group.createFromSvg(id, attributes)],
+  ]);
+
+  /** Creates a shape from CLI parameter tokens (`create` command). */
+  public createFromTokens(
+    typeName: string,
+    id: string,
+    params: readonly string[],
+  ): Shape {
     switch (typeName) {
       case "rect":
         return this.createRect(id, params);
@@ -44,6 +70,25 @@ export class ShapeFactory {
           `unknown shape type: ${typeName} (is the plugin loaded?)`,
         );
     }
+  }
+
+  /** True when an imported SVG element of this name is supported. */
+  public supportsSvgElement(localName: string): boolean {
+    return this.svgBuilders.has(localName);
+  }
+
+  /** Creates a shape from the attributes of one imported SVG element. */
+  public createFromSvgElement(
+    localName: string,
+    id: string,
+    attributes: AttributeLookup,
+    content: string,
+  ): Shape {
+    const builder = this.svgBuilders.get(localName);
+    if (builder === undefined) {
+      throw new Error(`unsupported SVG element: ${localName}`);
+    }
+    return builder(id, attributes, content);
   }
 
   private createRect(id: string, params: readonly string[]): Rect {

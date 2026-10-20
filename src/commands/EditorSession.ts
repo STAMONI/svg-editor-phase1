@@ -1,4 +1,4 @@
-import { asCliError, CliError } from "../errors/CliError";
+import { CliError } from "../errors/CliError";
 import { UndoManager } from "../history/UndoManager";
 import type { SvgDocument } from "../model/SvgDocument";
 import type { Command } from "./Command";
@@ -75,7 +75,7 @@ export class EditorSession {
     } catch (error) {
       this.currentDocument = snapshotBefore ?? documentBefore;
       this.currentFilePath = pathBefore;
-      throw asCliError(error);
+      throw CliError.normalize(error);
     }
   }
 

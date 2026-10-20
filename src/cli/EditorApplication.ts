@@ -15,7 +15,7 @@ import { MoveCommand } from "../commands/edit/MoveCommand";
 import { ScaleCommand } from "../commands/edit/ScaleCommand";
 import { SetCommand } from "../commands/edit/SetCommand";
 import { UngroupCommand } from "../commands/edit/UngroupCommand";
-import { ShapeFactory } from "../commands/factories/ShapeFactory";
+import { ShapeFactory } from "../model/ShapeFactory";
 import { RedoCommand } from "../commands/history/RedoCommand";
 import { UndoCommand } from "../commands/history/UndoCommand";
 import { HelpCommand } from "../commands/query/HelpCommand";
