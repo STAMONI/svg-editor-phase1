@@ -10,12 +10,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "precli": "npm run build",
     "cli": "node dist/src/index.js",
-    "test": "npm run build && node --test --test-isolation=none \"dist/test/**/*.test.js\"",
+    "test": "npm run build && node scripts/run-tests.mjs",
     "check:layering": "node scripts/check-layering.mjs",
-    "verify": "npm run build && npm run check:layering && node --test --test-isolation=none \"dist/test/**/*.test.js\""
+    "verify": "npm run build && npm run check:layering && node scripts/run-tests.mjs"
   },
   "engines": {
-    "node": ">=22.8.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "svg",
