@@ -37,6 +37,11 @@ export abstract class Shape {
     if (id.length === 0) {
       throw new CliError("shape id must not be empty");
     }
+    // SVG ids are XML names: whitespace inside an id would produce a file that
+    // CSS / URL fragments cannot address, so it is rejected early.
+    if (/\s/.test(id)) {
+      throw new CliError(`invalid id: ${id}`);
+    }
     this.shapeId = id;
   }
 

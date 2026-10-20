@@ -9,13 +9,13 @@ export const BANNER = "svg-editor 0.1 — type 'help' for commands";
 export const PROMPT = "svg> ";
 
 /**
- * Interactive terminal front end.
+ * Terminal front end.
  *
  * The REPL only parses lines, dispatches to the registry and prints the lines
  * returned by the session. All domain behaviour stays in the command layer.
  *
- * Works both interactively (prompt `svg> `) and with piped input, which makes
- * scripted demos and automated tests possible without a TTY.
+ * Works both interactively (prompt `svg> `) and with piped input / script
+ * files, which makes scripted demos and automated tests possible without a TTY.
  */
 export class Repl {
   public constructor(
@@ -60,19 +60,33 @@ export class Repl {
       terminal: interactive,
     });
 
-    if (interactive) {
+    if (!interactive) {
+      // Piped input: read every line, no prompt, no echo.
+      for await (const line of rl) {
+        this.executeLine(line);
+        if (this.session.exitRequested) {
+          break;
+        }
+      }
+      rl.close();
+      return;
+    }
+
+    // Interactive: classic line-event loop, so the prompt is always redrawn
+    // after a command (an async iterator with manual prompt() calls is fragile
+    // on a real console).
+    await new Promise<void>((resolve) => {
       rl.setPrompt(PROMPT);
       rl.prompt();
-    }
-    for await (const line of rl) {
-      this.executeLine(line);
-      if (this.session.exitRequested) {
-        break;
-      }
-      if (interactive) {
+      rl.on("line", (line: string) => {
+        this.executeLine(line);
+        if (this.session.exitRequested) {
+          rl.close();
+          return;
+        }
         rl.prompt();
-      }
-    }
-    rl.close();
+      });
+      rl.on("close", () => resolve());
+    });
   }
 }

@@ -133,3 +133,43 @@ test("unknown attributes such as transform and style are ignored on import", () 
   assert.deepEqual(editor.run("read transform.svg"), ["read transform.svg (1 elements)"]);
   assert.equal(editor.run("tree")[1], "└── rect#r1  x=0 y=0 w=10 h=10");
 });
+
+test("percentage canvas sizes fall back to viewBox instead of becoming pixels", () => {
+  const editor = new EditorHarness();
+  editor.fileSystem.putFile(
+    "percent.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 300 200">
+      <rect id="r1" x="0" y="0" width="10" height="10"/>
+    </svg>`,
+  );
+  editor.run("read percent.svg");
+  assert.equal(editor.session.document.width, 300);
+  assert.equal(editor.session.document.height, 200);
+  assert.deepEqual(editor.run("canvas"), ["canvas 300x200"]);
+});
+
+test("pixel units on the root element are accepted", () => {
+  const editor = new EditorHarness();
+  editor.fileSystem.putFile(
+    "px.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="100px">
+      <rect id="r1" x="0" y="0" width="10" height="10"/>
+    </svg>`,
+  );
+  editor.run("read px.svg");
+  assert.equal(editor.session.document.width, 200);
+  assert.equal(editor.session.document.height, 100);
+});
+
+test("imported ids containing whitespace are rejected as invalid SVG", () => {
+  const editor = new EditorHarness();
+  editor.fileSystem.putFile(
+    "badid.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
+      <rect id="a b" x="0" y="0" width="10" height="10"/>
+    </svg>`,
+  );
+  assert.deepEqual(editor.run("read badid.svg"), [
+    "error: invalid SVG: badid.svg",
+  ]);
+});

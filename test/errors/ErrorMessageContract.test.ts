@@ -71,6 +71,10 @@ test("document and shape errors use the exact contract messages", () => {
   assert.deepEqual(editor.run("set r1 opacity 1"), [
     "error: unknown attribute: opacity",
   ]);
+  // ids must be valid XML names (no whitespace), so SVG files stay addressable
+  assert.deepEqual(editor.run('create g "space id"'), [
+    "error: invalid id: space id",
+  ]);
 });
 
 test("composite errors use the exact contract messages", () => {

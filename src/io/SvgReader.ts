@@ -175,7 +175,14 @@ export class SvgReader {
     if (raw === undefined) {
       return null;
     }
-    const match = /^\s*(-?\d+(?:\.\d+)?)/.exec(raw);
+    const trimmed = raw.trim();
+    // Percentage lengths depend on a viewport this tool does not model; treat
+    // them as absent so viewBox / the 800x600 default is used instead of
+    // silently interpreting "100%" as 100 pixels.
+    if (trimmed.length === 0 || trimmed.includes("%")) {
+      return null;
+    }
+    const match = /^(-?\d+(?:\.\d+)?)(?:px)?$/.exec(trimmed);
     if (match === null) {
       return null;
     }

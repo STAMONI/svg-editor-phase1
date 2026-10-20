@@ -130,3 +130,33 @@ test("errors keep the error: prefix and a single line each", () => {
     assert.match(line, /^error: [^\n]+$/);
   }
 });
+
+test("text values are quoted and escaped in tree and show output", () => {
+  const editor = new EditorHarness();
+  editor.runLines("init", 'create text t1 10 20 "say \\"hi\\""');
+  assert.deepEqual(editor.run("tree"), [
+    "svg (800x600)",
+    '└── text#t1  (10,20) "say \\"hi\\""',
+  ]);
+  assert.deepEqual(editor.run("show t1"), [
+    "text#t1  parent=svg",
+    "  x=10 y=20",
+    '  text="say \\"hi\\""',
+  ]);
+});
+
+test("multi line text imported from SVG stays on one output line", () => {
+  const editor = new EditorHarness();
+  editor.fileSystem.putFile(
+    "multiline.svg",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <text id="t1" x="1" y="2">first
+second</text>
+    </svg>`,
+  );
+  editor.run("read multiline.svg");
+  const tree = editor.run("tree");
+  assert.equal(tree.length, 2);
+  assert.ok(tree[1].includes('"first\\nsecond"'));
+});
+

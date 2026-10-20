@@ -10,6 +10,13 @@ import { readFileSync } from "node:fs";
 
 import { EditorApplication } from "./cli/EditorApplication";
 
+/** Exits quietly when the output pipe is closed early (e.g. `... | head`). */
+process.stdout.on("error", (error: Error) => {
+  if ((error as NodeJS.ErrnoException).code === "EPIPE") {
+    process.exit(0);
+  }
+});
+
 function runScript(application: EditorApplication, scriptPath: string): void {
   let content: string;
   try {

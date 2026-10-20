@@ -91,7 +91,7 @@ export class TextShape extends LeafShape {
   public override describeDetails(): string[] {
     const lines: string[] = [
       `x=${formatNumber(this.xValue)} y=${formatNumber(this.yValue)}`,
-      `text="${this.contentValue}"`,
+      `text=${TextShape.quoteForDisplay(this.contentValue)}`,
     ];
     const style = super.describeDetails();
     // super returns the geometry line again; keep only the style part.
@@ -100,7 +100,22 @@ export class TextShape extends LeafShape {
   }
 
   protected override describeGeometry(): string {
-    return `(${formatNumber(this.xValue)},${formatNumber(this.yValue)}) "${this.contentValue}"`;
+    return `(${formatNumber(this.xValue)},${formatNumber(this.yValue)}) ${TextShape.quoteForDisplay(this.contentValue)}`;
+  }
+
+  /**
+   * Quotes one text content for CLI output: quotes, backslashes and control
+   * characters are escaped so `tree` / `show` stay on one readable line even
+   * for text imported from foreign SVG files.
+   */
+  private static quoteForDisplay(value: string): string {
+    const escaped = value
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\r/g, "\\r")
+      .replace(/\n/g, "\\n")
+      .replace(/\t/g, "\\t");
+    return `"${escaped}"`;
   }
 
   protected override geometryEntries(): AttributeEntry[] {
