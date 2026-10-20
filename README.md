@@ -10,10 +10,10 @@ TypeScript / OOP / Command-pattern implementation of the phase 1 SVG editor CLI.
 ```bash
 npm install
 npm run cli            # interactive REPL, prompt "svg> "
-npm run verify         # build + layering check + all automated tests (83 tests)
+npm run verify         # build + layering check + all automated tests (88 tests)
 ```
 
-Requires Node.js >= 22.8 (uses the built-in `node:test` runner).
+Requires Node.js >= 20 (no runtime dependencies; tests use the built-in `node:test`).
 
 ## Try it
 
@@ -50,6 +50,16 @@ plugin phase and reports `unknown shape type`). Attributes settable with `set`:
 `fill`, `stroke`, `stroke-width` plus the geometry attributes of each type.
 All errors start with `error:`; a failed command never changes the document.
 
+## Useful notes
+
+- `npm run cli` builds first (`precli`), so a fresh clone only needs `npm install`.
+- Pipe or redirect commands for scripted runs: `node dist/src/index.js scripts.txt`
+  (blank lines and `#` comments are ignored).
+- Windows PowerShell 5.1 displays non-ASCII output incorrectly when it reads piped UTF-8.
+  For demos run `chcp 65001` first (interactive TTY output is fine).
+- Tests run in-process via `scripts/run-tests.mjs`, so they work on Node >= 20 without
+  version specific `node --test` flags and without spawning child processes.
+
 ## Layout
 
 ```
@@ -59,7 +69,7 @@ src/io       XML parser, SVG reader/writer, file system abstraction
 src/history  snapshot based undo/redo (Memento)
 src/commands Command interface, registry, parser, session, concrete commands
 src/cli      REPL and composition root
-test/        node:test suites (83 tests across 11 files)
+test/        node:test suites (88 tests across 11 files)
 examples/    replayable command scripts + sample SVG files
-scripts/     layering check
+scripts/     layering check + in-process test runner
 ```

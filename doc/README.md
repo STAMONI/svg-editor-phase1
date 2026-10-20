@@ -5,7 +5,7 @@
 > 命令输出、缺陷与修订均来自本仓库真实执行过程，与 `git log` 相互印证。
 
 - 仓库：<https://github.com/STAMONI/svg-editor-phase1>
-- 技术栈：TypeScript（strict）+ Node.js（≥ 22.8）+ `node:test`，零运行时依赖
+- 技术栈：TypeScript（strict）+ Node.js（≥ 20）+ `node:test`，零运行时依赖
 - 运行：
 
 ```bash
@@ -34,7 +34,7 @@ node dist/src/index.js examples/flowchart.txt   # 回放脚本，生成 SVG
 | `src/index.ts` | 进程入口（交互模式 / 脚本回放模式） | — |
 | `test/` | 自动化测试（`node --test` 驱动） | 11 个测试文件 + 2 个测试辅助类 |
 | `examples/` | 可直接回放的命令脚本、外部 SVG 样例、生成产物 | `flowchart.txt`、`demo.txt`、`other.svg`、`flowchart.svg`、`demo.svg` |
-| `scripts/` | 工程质量脚本 | `check-layering.mjs`（依赖方向静态检查） |
+| `scripts/` | 工程质量脚本 | `check-layering.mjs`（依赖方向静态检查）、`run-tests.mjs`（跨 Node 版本的进程内测试运行器） |
 
 ### 1.2 组件图（PlantUML）
 
@@ -359,8 +359,9 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 - 测试：`test/model/DocumentModel.test.ts` 12 项（父链、ID 唯一/大小写敏感、递归移动缩放、
   属性白名单、快照深拷贝、画布尺寸校验），`npm run build` + `node --test` 全绿。
 - 环境说明：`node --test` 默认给每个测试文件起子进程，本机受限环境下子进程管道被拒
-  （`spawn EPERM`），因此测试脚本固定使用 `--test-isolation=none`（同进程执行，仍是官方
-  runner）。这一差异记录在此，方便换机器时理解。
+  （`spawn EPERM`），因此阶段 2～8 的测试脚本使用 `--test-isolation=none`（同进程执行，仍是
+  官方 runner）。阶段 9 发现该参数只存在于 Node ≥ 22.8，已改为 `scripts/run-tests.mjs`
+  （进程内运行，Node ≥ 20 通用），见 2.9。
 
 ### 2.3 阶段 3：Command 模式与基础命令（`feat: implement core CLI commands`）
 
@@ -442,6 +443,36 @@ errors  ←  model  ←  io  ←  commands  ←  cli
   抛错而不是返回 `null`（应使用 `findShape`）。两处都修正测试，未改动实现。
 - 测试总数 67 → 83，全部通过；文档新增类图、错误契约表、验收清单，并更新测试/检查数字。
 
+### 2.9 阶段 9：可运行性加固——修复真实运行问题（`fix:` / `test:` / `docs:` 三个提交）
+
+- 动机：用户要求「修复所有错误，一定要能正常运行」。于是按「全新克隆」的方式做了一次端到端自查：
+  删除 `node_modules`、`dist` 后重新 `npm install` → 构建 → 全量测试 → 真实 CLI 运行，
+  并补测异常输入与外部 SVG，发现并修复了以下真实问题。
+- **缺陷 1（功能错误）**：`<svg width="100%" height="100%" viewBox="0 0 300 200">` 被读成
+  100×100 画布。原因是尺寸解析用前缀正则把 `100%` 当成了 `100` 像素。修复：百分比长度视为
+  「未给出」，回退到 `viewBox`（再回退 800×600），并补两条测试（百分比回退、`px` 单位）。
+- **缺陷 2（可移植性错误）**：测试脚本使用 `node --test --test-isolation=none`，该参数仅 Node
+  ≥ 22.8 支持，旧版 Node 上 `npm test` 直接报参数错误；而普通 `node --test` 又会为每个文件
+  起子进程（受限环境 `spawn EPERM`）。修复：新增 `scripts/run-tests.mjs`，在**同一进程**内
+  `import` 全部 `dist/test/**/*.test.js`，仍由 `node:test` 报告结果与设置退出码；`npm test` /
+  `npm run verify` 改为调用它，Node ≥ 20 均可运行。用一个故意失败的临时测试验证过
+  「失败时退出码为 1」，确认没有削弱 CI 能力。
+- **缺陷 3（显示错误）**：文本内容里的引号/换行/制表符在 `tree`、`show` 中未转义，
+  形如 `"say "hi""`，导入多行文本时还会破坏树形布局。修复：输出时统一转义为
+  `"say \"hi\""`、`first\nsecond`，保存/读取仍保持原始内容。
+- **缺陷 4（健壮性）**：`create g "a b"` 这类含空白的 id 会被接受，保存后产生无法被
+  CSS/URL 片段寻址的 SVG 属性。修复：构造图形时校验 id 不允许空白，报 `invalid id: a b`；
+  导入含空白 id 的外部 SVG 按 `invalid SVG` 处理。
+- **缺陷 5（健壮性）**：输出管道被提前关闭（如 `| head`）时可能报 `EPIPE` 崩溃；入口增加
+  对 stdout `EPIPE` 的静默退出处理。
+- **缺陷 6（交互可靠性）**：交互模式原先用 `for await` 迭代 readline 再手动 `prompt()`，
+  在真实终端下提示符重绘不够稳。修复：交互模式改为标准 `line` 事件 + `rl.prompt()` 循环，
+  管道/脚本模式仍是不回显、不打印提示符。
+- 验证：清空 `node_modules`/`dist` 后重新 `npm install` + `npm run verify` 全绿（88 项测试）；
+  `npm run cli`、管道 REPL、`node dist/src/index.js examples/flowchart.txt`、
+  `examples/demo.txt` 全部真实运行通过。
+- 测试总数 83 → 88（新增百分比回退、px 单位、空白 id、文本转义、多行文本 5 项），无功能范围变化。
+
 ---
 
 ## 3. 一致性自查
@@ -486,14 +517,18 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 
 - `tsconfig.json`：`strict`、`noImplicitOverride`、`noUnusedLocals`、`noUnusedParameters`、
   `noFallthroughCasesInSwitch`、`forceConsistentCasingInFileNames`，目标 ES2022 / CommonJS。
-- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 8 最终执行
-  `npm run verify`（构建 + 依赖方向检查 + 83 项测试），全部通过。
+- 每个阶段提交前都实际执行 `npm run build`（tsc），全部通过；阶段 9 最终执行
+  `npm run verify`（构建 + 依赖方向检查 + 88 项测试），全部通过。
 
 ### 4.2 自动化测试
 
 运行方式：`npm test`（编译后执行）或 `npm run verify`（编译 + 依赖检查 + 测试）。
 测试框架为 Node 内置 `node:test` + `node:assert/strict`，无第三方测试依赖；
 `test/support/EditorHarness` 复用真实的组合根，用内存文件系统替换磁盘 IO。
+测试入口是 `scripts/run-tests.mjs`：它在**同一进程**内依次 `import` 编译后的
+`dist/test/**/*.test.js`，不依赖 `node --test` 的逐文件子进程，也不依赖只在 Node ≥ 22.8
+才存在的 `--test-isolation` 参数，因此 Node ≥ 20 都能直接运行；失败时 `node:test` 仍会设置
+非零退出码（阶段 9 用注入失败用例实测验证过）。
 
 | 阶段 | 测试数量 | 结果 |
 |---|---|---|
@@ -503,6 +538,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 5 撤销/持久化 | 56 | 全绿 |
 | 6 查询与最终 | 67 | 全绿 |
 | 8 交付强化（错误契约 + 边界） | 83 | 全绿 |
+| 9 运行性修复（百分比尺寸、文本转义、空白 id 等） | 88 | 全绿 |
 
 覆盖附件第 5 节的 10 类验收场景：
 
@@ -521,6 +557,7 @@ errors  ←  model  ←  io  ←  commands  ←  cli
 | 补充：附件 4.2 全部错误信息逐字契约 | `test/errors/ErrorMessageContract.test.ts` |
 | 补充：复合操作边界（跨父分组、位置提升、嵌套 z-order、缩放撤销） | `test/cli/CompositeEdgeCases.test.ts` |
 | 补充：SVG 导入边界（未知元素、viewBox 回退、引号/CDATA/实体、忽略属性） | `test/io/SvgImportEdgeCases.test.ts` |
+| 补充：百分比尺寸回退 viewBox、px 单位、空白 id 拒绝、文本转义/多行 | `test/io/SvgImportEdgeCases.test.ts`、`test/cli/QueryCommands.test.ts`、`ErrorMessageContract.test.ts` |
 
 异常/边界专项：未初始化文档、未闭合引号、非法数字、非正缩放、未知属性、`box` 未注册、
 顶层容器不能 ungroup、容器入自身子孙、文件不可写、非法 XML、重复 ID 读入、中文文本往返、
@@ -567,9 +604,11 @@ saved to examples/flowchart.svg (8 elements)
 - 回归：每个阶段都在前一阶段测试全绿的基础上追加新测试，从未出现「修新坏旧」后未修复的提交；
   保存→读取往返、中文往返、撤销→重做往返均作为回归用例固化。
 - 依赖方向检查：`npm run check:layering`（`layering check passed (53 files)`）。
-- 提交纪律：共 9 个提交（7 个阶段 + 2 个阶段 8 强化提交）逐提交推送；每个提交前实际执行构建与
-  测试；提交信息与内容对应，未使用 `reset --hard` / 强制推送分支 / 空提交 / 修改提交时间。
-  `final` 标签在阶段 8 之后被移动到最新提交（仍是同一条线性历史的末端，**没有重写或压缩历史**）。
+- 提交纪律：共 13 个提交（7 个阶段 + 阶段 8 的 3 个强化提交 + 阶段 9 的 3 个可运行性修复提交）
+  逐提交推送；每个提交前实际执行构建与测试；提交信息与内容对应，未使用 `reset --hard` /
+  强制推送分支 / 空提交 / 修改提交时间。
+  `final` 标签在阶段 8、阶段 9 之后均被移动到最新提交（仍是同一条线性历史的末端，
+  **没有重写或压缩历史**）。
 
 ### 4.5 需求验收清单（附件逐条对照）
 
@@ -586,7 +625,8 @@ saved to examples/flowchart.svg (8 elements)
 | undo/redo：一命令一单元、复合整体撤销、显示命令跳过、文档类命令后禁止、新编辑清空 redo | 全部实现并用测试锁定 | `UndoRedo.test.ts` |
 | 两节点流程图案例可按附件命令顺序构建 | 命令顺序与树输出逐行比对通过 | `FlowchartCase.test.ts` |
 | `doc/README.md` 四节 + PlantUML 图 | 已具备（组件图 + 类图） | 本文档 |
-| 分阶段提交 + `final` 标签 | 9 个提交、逐提交推送；`final` 已推送并远程验证 | `git log`、`git ls-remote`（见最终报告） |
+| 项目可直接运行（clone → install → build → test → CLI） | 清空 `node_modules`/`dist` 后重新安装并全量验证通过 | 阶段 9 记录、`npm run verify`、CLI 实测 |
+| 分阶段提交 + `final` 标签 | 13 个提交、逐提交推送；`final` 已推送并远程验证 | `git log`、`git ls-remote`（见最终报告） |
 
 ### 4.6 已知限制（如实说明）
 
@@ -602,9 +642,11 @@ saved to examples/flowchart.svg (8 elements)
    是可接受的取舍。
 6. **顶层容器不能 `ungroup`**（附件错误表要求），因此顶层 `g` 需要先 `addto` 到其他容器或
    用其他方式重组。
-7. 测试脚本使用 `--test-isolation=none`，因为本机受限环境无法为每个测试文件创建子进程；
-   在普通机器上该参数同样可用（Node ≥ 22.8）。
-8. Git 推送在本机受限环境下需要临时 `-c http.sslBackend=openssl` 与一次权限提升，
+7. **长度单位**：画布尺寸接受纯数字与 `px`；百分比（如 `width="100%"`）以及 `em` 等单位视为
+   「未提供」，回退到 `viewBox` / 800×600 默认值（本工具不做视口计算）。
+8. 测试入口是 `scripts/run-tests.mjs`（进程内运行，Node ≥ 20 均可）；不再依赖 `node --test`
+   的逐文件子进程与 `--test-isolation` 参数，因此换机器或换 Node 版本都不会因参数不支持而失败。
+9. Git 推送在本机受限环境下需要临时 `-c http.sslBackend=openssl` 与一次权限提升，
    未修改任何全局配置、未关闭 TLS 校验；换到网络/凭据正常的机器上无需这些参数。
 
 ---
